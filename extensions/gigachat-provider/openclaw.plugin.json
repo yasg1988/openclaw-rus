@@ -1,0 +1,9 @@
+{
+  "id": "gigachat-provider",
+  "providers": ["gigachat"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

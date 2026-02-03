@@ -1,0 +1,9 @@
+{
+  "id": "yandexgpt-provider",
+  "providers": ["yandexgpt"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

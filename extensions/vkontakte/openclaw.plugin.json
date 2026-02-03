@@ -1,0 +1,9 @@
+{
+  "id": "vkontakte",
+  "channels": ["vkontakte"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

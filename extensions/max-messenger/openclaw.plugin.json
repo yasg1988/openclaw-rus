@@ -1,0 +1,9 @@
+{
+  "id": "max-messenger",
+  "channels": ["max-messenger"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

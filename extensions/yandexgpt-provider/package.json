@@ -1,35 +1,11 @@
 {
   "name": "@openclaw-rus/yandexgpt-provider",
   "version": "0.1.0",
-  "description": "Провайдер YandexGPT для OpenClaw",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
-  },
-  "keywords": [
-    "openclaw",
-    "yandex",
-    "yandexgpt",
-    "provider",
-    "llm"
-  ],
-  "author": "yasg1988",
-  "license": "MIT",
+  "description": "OpenClaw YandexGPT provider plugin",
+  "type": "module",
   "openclaw": {
-    "extensions": {
-      "yandexgpt-provider": {
-        "entry": "dist/index.js",
-        "slot": "provider"
-      }
-    }
-  },
-  "peerDependencies": {
-    "openclaw": "*"
-  },
-  "devDependencies": {
-    "@sinclair/typebox": "^0.32.0",
-    "typescript": "^5.0.0"
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }

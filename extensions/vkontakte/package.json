@@ -1,34 +1,11 @@
 {
   "name": "@openclaw-rus/vkontakte",
   "version": "0.1.0",
-  "description": "Канал VKонтакте для OpenClaw",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
-  },
-  "keywords": [
-    "openclaw",
-    "vk",
-    "vkontakte",
-    "channel"
-  ],
-  "author": "yasg1988",
-  "license": "MIT",
+  "description": "OpenClaw VKонтакте channel plugin",
+  "type": "module",
   "openclaw": {
-    "extensions": {
-      "vkontakte": {
-        "entry": "dist/index.js",
-        "slot": "channel"
-      }
-    }
-  },
-  "peerDependencies": {
-    "openclaw": "*"
-  },
-  "devDependencies": {
-    "@sinclair/typebox": "^0.32.0",
-    "typescript": "^5.0.0"
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }
