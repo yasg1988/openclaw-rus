@@ -1,0 +1,23 @@
+# Docker Compose для прокси к API OpenAI/Anthropic
+# Используется для обхода блокировок на российских VPS
+#
+# Запуск: docker-compose up -d
+# Остановка: docker-compose down
+
+version: '3.8'
+
+services:
+  proxy:
+    image: nginx:alpine
+    container_name: openclaw-api-proxy
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    driver: bridge

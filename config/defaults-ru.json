@@ -1,0 +1,43 @@
+{
+  "$schema": "https://openclaw.ai/schemas/config.json",
+  "_comment": "Пресет конфигурации OpenClaw для России",
+
+  "agents": {
+    "defaults": {
+      "userTimezone": "Europe/Moscow",
+      "locale": "ru-RU"
+    }
+  },
+
+  "channels": {
+    "vkontakte": {
+      "enabled": false,
+      "_comment": "Настройте accessToken и groupId для включения",
+      "accessToken": "",
+      "groupId": 0
+    },
+    "max-messenger": {
+      "enabled": false,
+      "_comment": "Настройте botToken для включения",
+      "botToken": ""
+    }
+  },
+
+  "providers": {
+    "yandexgpt": {
+      "enabled": false,
+      "_comment": "Настройте apiKey и folderId для включения",
+      "apiKey": "",
+      "folderId": "",
+      "defaultModel": "yandexgpt"
+    },
+    "gigachat": {
+      "enabled": false,
+      "_comment": "Настройте clientId и clientSecret для включения",
+      "clientId": "",
+      "clientSecret": "",
+      "scope": "GIGACHAT_API_PERS",
+      "defaultModel": "GigaChat"
+    }
+  }
+}

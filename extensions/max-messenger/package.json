@@ -1,0 +1,35 @@
+{
+  "name": "@openclaw-rus/max-messenger",
+  "version": "0.1.0",
+  "description": "Канал MAX Messenger для OpenClaw",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "openclaw",
+    "max",
+    "icq",
+    "messenger",
+    "channel"
+  ],
+  "author": "yasg1988",
+  "license": "MIT",
+  "openclaw": {
+    "extensions": {
+      "max-messenger": {
+        "entry": "dist/index.js",
+        "slot": "channel"
+      }
+    }
+  },
+  "peerDependencies": {
+    "openclaw": "*"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "^0.32.0",
+    "typescript": "^5.0.0"
+  }
+}
