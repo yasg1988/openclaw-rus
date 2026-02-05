@@ -18,7 +18,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   refreshAccessToken,
@@ -70,7 +70,7 @@ function loadCredentials(path: string): ClaudeCredentials | null {
  */
 function saveCredentials(path: string, credentials: ClaudeCredentials): void {
   try {
-    writeFileSync(path, JSON.stringify(credentials, null, 2), "utf-8");
+    writeFileSync(path, JSON.stringify(credentials, null, 2), { encoding: "utf-8", mode: 0o600 });
   } catch (error) {
     console.error(`[${PLUGIN_ID}] Failed to save credentials:`, error);
   }
@@ -104,7 +104,7 @@ function updateAgentAuthProfile(agentDir: string, newAccessToken: string): boole
     }
 
     if (updated) {
-      writeFileSync(authProfilePath, JSON.stringify(authProfile, null, 2), "utf-8");
+      writeFileSync(authProfilePath, JSON.stringify(authProfile, null, 2), { encoding: "utf-8", mode: 0o600 });
     }
 
     return updated;
@@ -149,6 +149,14 @@ function updateAllAgents(newAccessToken: string): number {
 function syncTokenToAgents(): void {
   const credentialsPath = currentConfig.credentialsPath || DEFAULT_CREDENTIALS_PATH;
 
+  // Security: validate path is within ~/.openclaw/
+  const openclawDir = join(homedir(), ".openclaw");
+  const resolvedPath = resolve(credentialsPath);
+  if (!resolvedPath.startsWith(openclawDir)) {
+    console.error(`[${PLUGIN_ID}] credentialsPath must be within ~/.openclaw/`);
+    return;
+  }
+
   const credentials = loadCredentials(credentialsPath);
   if (!credentials) {
     return;
@@ -165,6 +173,14 @@ function syncTokenToAgents(): void {
  */
 async function checkAndRefreshToken(): Promise<void> {
   const credentialsPath = currentConfig.credentialsPath || DEFAULT_CREDENTIALS_PATH;
+
+  // Security: validate path is within ~/.openclaw/
+  const openclawDir = join(homedir(), ".openclaw");
+  const resolvedPath = resolve(credentialsPath);
+  if (!resolvedPath.startsWith(openclawDir)) {
+    console.error(`[${PLUGIN_ID}] credentialsPath must be within ~/.openclaw/`);
+    return;
+  }
 
   const credentials = loadCredentials(credentialsPath);
   if (!credentials) {
@@ -268,6 +284,14 @@ const plugin = {
 
     const credentialsPath = currentConfig.credentialsPath || DEFAULT_CREDENTIALS_PATH;
     const intervalMinutes = currentConfig.refreshIntervalMinutes || DEFAULT_REFRESH_INTERVAL_MINUTES;
+
+    // Security: validate path is within ~/.openclaw/
+    const openclawDir = join(homedir(), ".openclaw");
+    const resolvedPath = resolve(credentialsPath);
+    if (!resolvedPath.startsWith(openclawDir)) {
+      console.error(`[${PLUGIN_ID}] credentialsPath must be within ~/.openclaw/`);
+      return;
+    }
 
     // Проверяем наличие credentials
     if (!existsSync(credentialsPath)) {
