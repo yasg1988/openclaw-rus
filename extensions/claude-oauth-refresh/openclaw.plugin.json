@@ -1,0 +1,19 @@
+{
+  "id": "claude-oauth-refresh",
+  "name": "Claude OAuth Auto-Refresh",
+  "description": "Автоматическое обновление OAuth токенов для подписки Claude (Anthropic)",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "credentialsPath": {
+        "type": "string",
+        "description": "Путь к файлу claude-credentials.json (по умолчанию ~/.openclaw/claude-credentials.json)"
+      },
+      "refreshIntervalMinutes": {
+        "type": "number",
+        "description": "Интервал проверки токенов в минутах (по умолчанию 30)"
+      }
+    }
+  }
+}

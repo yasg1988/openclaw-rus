@@ -1,0 +1,11 @@
+{
+  "name": "@openclaw-rus/claude-oauth-refresh",
+  "version": "0.1.0",
+  "description": "Auto-refresh OAuth tokens for Claude (Anthropic) subscription",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
