@@ -96,7 +96,7 @@ function updateAgentAuthProfile(agentDir: string, newAccessToken: string): boole
     if (authProfile.profiles) {
       for (const [profileId, profile] of Object.entries(authProfile.profiles)) {
         const p = profile as { provider?: string; token?: string };
-        if (p.provider === "anthropic" && p.token) {
+        if (p.provider === "anthropic") {
           p.token = newAccessToken;
           updated = true;
         }
@@ -141,6 +141,23 @@ function updateAllAgents(newAccessToken: string): number {
   }
 
   return updatedCount;
+}
+
+/**
+ * Синхронизирует текущий токен из credentials в auth-profiles всех агентов
+ */
+function syncTokenToAgents(): void {
+  const credentialsPath = currentConfig.credentialsPath || DEFAULT_CREDENTIALS_PATH;
+
+  const credentials = loadCredentials(credentialsPath);
+  if (!credentials) {
+    return;
+  }
+
+  const updatedAgents = updateAllAgents(credentials.claudeAiOauth.accessToken);
+  if (updatedAgents > 0) {
+    console.log(`[${PLUGIN_ID}] Synced token to ${updatedAgents} agent(s)`);
+  }
 }
 
 /**
@@ -263,6 +280,9 @@ const plugin = {
       console.log(`[${PLUGIN_ID}]    4. Restart OpenClaw gateway`);
       return;
     }
+
+    // Синхронизируем токен в агенты при старте
+    syncTokenToAgents();
 
     // Запускаем scheduler
     startRefreshScheduler(intervalMinutes);
