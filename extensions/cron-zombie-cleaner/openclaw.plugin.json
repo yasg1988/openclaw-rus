@@ -1,0 +1,19 @@
+{
+  "id": "cron-zombie-cleaner",
+  "name": "Cron Zombie Cleaner",
+  "description": "Убивает зависшие процессы openclaw-cron старше заданного порога",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "maxAgeMinutes": {
+        "type": "number",
+        "description": "Порог возраста процесса в минутах (по умолчанию 15)"
+      },
+      "checkIntervalMinutes": {
+        "type": "number",
+        "description": "Интервал проверки в минутах (по умолчанию 15)"
+      }
+    }
+  }
+}

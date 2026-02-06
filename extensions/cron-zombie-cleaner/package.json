@@ -1,0 +1,11 @@
+{
+  "name": "@openclaw-rus/cron-zombie-cleaner",
+  "version": "0.1.0",
+  "description": "Kill orphaned openclaw-cron processes that failed to exit",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
