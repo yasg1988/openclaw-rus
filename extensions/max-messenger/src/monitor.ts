@@ -3,6 +3,7 @@ import { MaxBotApi, type MaxBotInfo, type MaxUpdate } from "./api.js";
 import { getMaxRuntime } from "./runtime.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
+const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
 
 export interface MaxMonitorOptions {
   token: string;
@@ -63,6 +64,10 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
+}
+
+function sanitizeOutboundText(text: string): string {
+  return text.replace(REPLY_DIRECTIVE_TAG_RE, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function handleUpdate(
@@ -239,7 +244,7 @@ async function dispatchToOpenClaw(params: {
       cfg: config,
       dispatcherOptions: {
         deliver: async (payload: { text?: string }) => {
-          const replyText = payload.text ?? "";
+          const replyText = sanitizeOutboundText(payload.text ?? "");
           if (!replyText.trim()) {
             return;
           }
