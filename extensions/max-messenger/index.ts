@@ -1,20 +1,16 @@
-/**
- * Канал MAX Messenger для OpenClaw
- * Статус: В разработке (заглушка)
- */
+import type { ChannelPlugin, OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
+import { maxPlugin } from "./src/channel.js";
+import { setMaxRuntime } from "./src/runtime.js";
 
 const plugin = {
   id: "max-messenger",
   name: "MAX Messenger",
-  description: "Канал MAX Messenger — в разработке",
-  configSchema: {
-    type: "object" as const,
-    additionalProperties: false,
-    properties: {}
-  },
-  register() {
-    console.log("💬 Канал MAX Messenger — в разработке");
-    console.log("   https://github.com/yasg1988/openclaw-rus");
+  description: "MAX messenger channel plugin for OpenClaw",
+  configSchema: emptyPluginConfigSchema(),
+  register(api: OpenClawPluginApi) {
+    setMaxRuntime(api.runtime);
+    api.registerChannel({ plugin: maxPlugin as ChannelPlugin });
   },
 };
 

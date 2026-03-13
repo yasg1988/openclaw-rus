@@ -16,7 +16,7 @@ OpenClaw — это персональный ИИ-ассистент, котор
 | Расширение | Статус | Описание |
 |------------|--------|----------|
 | vkontakte | 🚧 В разработке | Канал для VK сообщений |
-| max-messenger | 🚧 В разработке | Канал для MAX Messenger |
+| max-messenger | ⚠️ MVP готов | Long polling, входящие сообщения, callback, ответы агента |
 | yandexgpt-provider | 🚧 В разработке | Провайдер YandexGPT |
 | gigachat-provider | 🚧 В разработке | Провайдер GigaChat |
 
@@ -90,6 +90,41 @@ docker-compose up -d
 ## Деплой на VPS
 
 См. [deploy/README.md](deploy/README.md) для инструкции по развёртыванию на VPS.
+
+## MAX Messenger
+
+Расширение `max-messenger` больше не является пустой заглушкой. Текущий MVP умеет:
+
+- long polling через MAX Bot API;
+- принимать `message_created`, `message_callback` и `bot_started`;
+- маршрутизировать входящие сообщения в OpenClaw по account/session;
+- отправлять и редактировать текстовые ответы агента обратно в MAX;
+- использовать `allowFrom` и `dmPolicy` для базового контроля доступа.
+
+Минимальный пример конфигурации канала:
+
+```json
+{
+  "plugins": {
+    "allowlist": ["max-messenger"]
+  },
+  "channels": {
+    "max": {
+      "enabled": true,
+      "botToken": "MAX_BOT_TOKEN",
+      "apiBaseUrl": "https://platform-api.max.ru",
+      "dmPolicy": "pairing",
+      "allowFrom": ["123456789"]
+    }
+  }
+}
+```
+
+Ограничения текущей версии:
+
+- пока нет полноценной работы с медиа и голосом;
+- пока нет отдельного onboarding/setup flow;
+- channel ориентирован на один bot token (`default` account).
 
 ## Структура проекта
 

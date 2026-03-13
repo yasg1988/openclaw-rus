@@ -1,6 +1,8 @@
 {
   "id": "max-messenger",
-  "channels": ["max-messenger"],
+  "name": "MAX Messenger",
+  "description": "MAX messenger (max.ru) channel plugin for OpenClaw",
+  "channels": ["max"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
