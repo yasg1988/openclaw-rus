@@ -16,9 +16,11 @@ import {
 } from "./logging.js";
 import { resolveMaxAccount } from "./channel.js";
 import {
+  applyPublicMenuState,
   buildPublicMainMenuAttachments,
   evaluatePublicSafety,
   isLifeSituationsLeafNode,
+  type PublicMenuState,
   sanitizePublicOutbound,
 } from "./public-safety.js";
 import { getMaxRuntime } from "./runtime.js";
@@ -29,6 +31,7 @@ const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
 const RADAR_MENU_LOGO_PATH = process.env.MAX_RADAR_MENU_LOGO_PATH || "/root/.openclaw/workspace/agents/gor_radar/logo.png";
 const publicMenuImageByPath = new Map<string, Promise<string | null>>();
+const publicMenuStateByChat = new Map<string, PublicMenuState>();
 
 type AdminIntent =
   | { action: "list" }
@@ -695,7 +698,9 @@ async function dispatchToOpenClaw(params: {
   }
 
   if (isPublicResidentBot) {
-    const publicDecision = evaluatePublicSafety(text);
+    const currentMenuState = publicMenuStateByChat.get(chatScopeKey);
+    const publicDecision = evaluatePublicSafety(text, currentMenuState);
+    publicMenuStateByChat.set(chatScopeKey, applyPublicMenuState(publicDecision, currentMenuState));
     let publicReply = publicDecision.reply;
     if (publicDecision.intent === "life_situations" && isLifeSituationsLeafNode(publicDecision.nodeId)) {
       publicReply = await buildLifeSituationKnowledgeReply(publicDecision.nodeId!, publicReply);

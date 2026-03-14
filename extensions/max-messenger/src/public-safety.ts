@@ -51,6 +51,10 @@ export type PublicSafetyDecision =
       nodeId?: string;
     };
 
+export type PublicMenuState = {
+  currentLifeSituationNodeId?: string | null;
+};
+
 type PublicMenuNode = {
   id: string;
   label: string;
@@ -129,6 +133,10 @@ const OUTBOUND_BLOCKLIST = [
 
 function normalize(input: string): string {
   return input.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function normalizeMenuLabel(input: string): string {
+  return normalize(input).replace(/^[^\p{L}\p{N}]+/gu, "").trim();
 }
 
 function hasAny(text: string, parts: readonly string[]): boolean {
@@ -275,16 +283,16 @@ export const PUBLIC_MAIN_MENU_TEXT =
 
 export function buildPublicMainMenuAttachments(imageToken?: string | null): unknown[] {
   const buttons = [
-    [{ type: "callback", text: "🚨 Сообщить о проблеме", payload: "Сообщить о проблеме" }],
-    [{ type: "callback", text: "📨 Мои обращения", payload: "Мои обращения" }],
-    [{ type: "callback", text: "🏢 Связь с УК", payload: "Связь с УК" }],
-    [{ type: "callback", text: "🧭 Жизненные ситуации", payload: "Жизненные ситуации" }],
-    [{ type: "callback", text: "🗓️ Запись на прием в мэрию", payload: "Запись на прием в мэрию" }],
-    [{ type: "callback", text: "🚫 Запрещенные надписи", payload: "Запрещенные надписи" }],
-    [{ type: "callback", text: "👩‍💼 Оператор", payload: "Оператор" }],
+    [{ type: "message", text: "🚨 Сообщить о проблеме" }],
+    [{ type: "message", text: "📨 Мои обращения" }],
+    [{ type: "message", text: "🏢 Связь с УК" }],
+    [{ type: "message", text: "🧭 Жизненные ситуации" }],
+    [{ type: "message", text: "🗓️ Запись на прием в мэрию" }],
+    [{ type: "message", text: "🚫 Запрещенные надписи" }],
+    [{ type: "message", text: "👩‍💼 Оператор" }],
     [
-      { type: "callback", text: "ℹ️ О проекте", payload: "О проекте" },
-      { type: "callback", text: "❓ Помощь", payload: "Помощь" },
+      { type: "message", text: "ℹ️ О проекте" },
+      { type: "message", text: "❓ Помощь" },
     ],
   ];
 
@@ -670,8 +678,8 @@ const LIFE_SITUATION_REPLIES: Record<string, string> = {
     "Приложения к правилам содержат дополнительные параметры и варианты размещения. Они нужны там, где важны конкретные схемы, приемы благоустройства и требования к оформлению.",
 };
 
-function makeMenuButton(text: string, payload: string) {
-  return [{ type: "callback", text, payload }];
+function makeMenuButton(text: string) {
+  return [{ type: "message", text }];
 }
 
 function findMenuNode(id: string, node: PublicMenuNode = LIFE_SITUATIONS_TREE, parent?: PublicMenuNode): { node: PublicMenuNode; parent?: PublicMenuNode } | null {
@@ -688,11 +696,11 @@ function findMenuNode(id: string, node: PublicMenuNode = LIFE_SITUATIONS_TREE, p
 }
 
 function buildMenuAttachments(node: PublicMenuNode, parent?: PublicMenuNode): unknown[] {
-  const buttons = (node.children ?? []).map((child) => makeMenuButton(child.label, child.id));
+  const buttons = (node.children ?? []).map((child) => makeMenuButton(child.label));
   if (parent) {
-    buttons.push(makeMenuButton("◀️ Назад", parent.id));
+    buttons.push(makeMenuButton("◀️ Назад"));
   }
-  buttons.push(makeMenuButton("🏠 Главное меню", "Главное меню"));
+  buttons.push(makeMenuButton("🏠 Главное меню"));
 
   return [
     {
@@ -712,7 +720,29 @@ function buildLeafReply(node: PublicMenuNode, parent?: PublicMenuNode): string {
   return `${topic}\n\n${body}`;
 }
 
-function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
+function resolveLifeSituationByLabel(text: string, state?: PublicMenuState): { node: PublicMenuNode; parent?: PublicMenuNode } | null {
+  const current = state?.currentLifeSituationNodeId ? findMenuNode(state.currentLifeSituationNodeId) : null;
+  if (normalizeMenuLabel(text) === normalizeMenuLabel("◀️ Назад")) {
+    return current?.parent ?? { node: LIFE_SITUATIONS_TREE };
+  }
+
+  const candidateParents = [current?.node, LIFE_SITUATIONS_TREE].filter(Boolean) as PublicMenuNode[];
+  for (const parentNode of candidateParents) {
+    for (const child of parentNode.children ?? []) {
+      if (normalizeMenuLabel(child.label) === normalizeMenuLabel(text)) {
+        return findMenuNode(child.id);
+      }
+    }
+  }
+
+  if (current && normalizeMenuLabel(current.node.label) === normalizeMenuLabel(text)) {
+    return current;
+  }
+
+  return null;
+}
+
+function evaluateLifeSituationsMenu(text: string, state?: PublicMenuState): PublicSafetyDecision | null {
   if (text === "жизненные ситуации") {
     return {
       kind: "menu",
@@ -721,14 +751,16 @@ function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
       reasonCode: "life_situations",
       reply: "Выберите тему по благоустройству города.",
       attachments: buildMenuAttachments(LIFE_SITUATIONS_TREE),
+      nodeId: LIFE_SITUATIONS_TREE.id,
     };
   }
 
-  if (!text.startsWith("ls:")) {
-    return null;
+  let found: { node: PublicMenuNode; parent?: PublicMenuNode } | null = null;
+  if (text.startsWith("ls:")) {
+    found = findMenuNode(text);
+  } else {
+    found = resolveLifeSituationByLabel(text, state);
   }
-
-  const found = findMenuNode(text);
   if (!found) {
     return null;
   }
@@ -741,6 +773,7 @@ function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
       reasonCode: "life_situations",
       reply: `Выберите раздел «${found.node.label}».`,
       attachments: buildMenuAttachments(found.node, found.parent),
+      nodeId: found.node.id,
     };
   }
 
@@ -755,10 +788,23 @@ function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
   };
 }
 
-export function evaluatePublicSafety(text: string): PublicSafetyDecision {
+export function applyPublicMenuState(
+  decision: PublicSafetyDecision,
+  previousState?: PublicMenuState
+): PublicMenuState {
+  if (decision.intent !== "life_situations") {
+    return { currentLifeSituationNodeId: null };
+  }
+
+  return {
+    currentLifeSituationNodeId: decision.nodeId ?? previousState?.currentLifeSituationNodeId ?? null,
+  };
+}
+
+export function evaluatePublicSafety(text: string, state?: PublicMenuState): PublicSafetyDecision {
   const normalized = normalize(text);
 
-  const lifeSituationsDecision = evaluateLifeSituationsMenu(normalized);
+  const lifeSituationsDecision = evaluateLifeSituationsMenu(normalized, state);
   if (lifeSituationsDecision) {
     return lifeSituationsDecision;
   }
