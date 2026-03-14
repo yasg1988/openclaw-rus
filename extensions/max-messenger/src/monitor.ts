@@ -35,6 +35,28 @@ export interface MaxMonitorOptions {
   abortSignal: AbortSignal;
 }
 
+function deriveUpdateConcurrencyKey(update: MaxUpdate, accountId: string): string {
+  if (update.update_type === "bot_started") {
+    const chatId = update.chat_id;
+    const userId = update.user?.user_id;
+    return `${accountId}:direct:${chatId ?? userId ?? "unknown"}`;
+  }
+
+  if (update.update_type === "message_callback") {
+    const chatId = update.callback?.message?.recipient?.chat_id;
+    const userId = update.callback?.user?.user_id;
+    return `${accountId}:callback:${chatId ?? userId ?? "unknown"}`;
+  }
+
+  if (update.update_type === "message_created") {
+    const chatId = update.message?.recipient?.chat_id;
+    const senderId = update.message?.sender?.user_id;
+    return `${accountId}:message:${chatId ?? senderId ?? "unknown"}`;
+  }
+
+  return `${accountId}:update:${update.update_type}:${update.timestamp ?? Date.now()}`;
+}
+
 export async function monitorMaxProvider(opts: MaxMonitorOptions) {
   const core = getMaxRuntime();
   const api = new MaxBotApi({
@@ -56,6 +78,7 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
   }
 
   let marker: number | null = null;
+  const inFlightByKey = new Map<string, Promise<void>>();
 
   while (!opts.abortSignal.aborted) {
     try {
@@ -70,11 +93,24 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
       }
 
       for (const update of response.updates || []) {
-        try {
-          await handleUpdate(update, { api, botInfo, opts, core });
-        } catch (error) {
-          console.error("[max] update handler error:", error);
-        }
+        const key = deriveUpdateConcurrencyKey(update, opts.accountId);
+        const previous = inFlightByKey.get(key) ?? Promise.resolve();
+        const next = previous
+          .catch(() => {})
+          .then(async () => {
+            try {
+              await handleUpdate(update, { api, botInfo, opts, core });
+            } catch (error) {
+              console.error("[max] update handler error:", error);
+            }
+          })
+          .finally(() => {
+            if (inFlightByKey.get(key) === next) {
+              inFlightByKey.delete(key);
+            }
+          });
+
+        inFlightByKey.set(key, next);
       }
     } catch (error) {
       if (opts.abortSignal.aborted) {
@@ -84,6 +120,8 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
+
+  await Promise.allSettled(Array.from(inFlightByKey.values()));
 }
 
 function sanitizeOutboundText(text: string): string {
