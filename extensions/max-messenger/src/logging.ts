@@ -40,6 +40,18 @@ type AllowedUserProfile = {
   last_seen_at?: string | null;
 };
 
+type RegisteredChat = {
+  chat_id: number;
+  chat_name?: string | null;
+  chat_tag?: string | null;
+  chat_type?: string | null;
+  is_admin?: boolean | null;
+  is_active?: boolean | null;
+};
+
+const registeredChatCache = new Map<string, { expiresAt: number; value: RegisteredChat | null }>();
+const REGISTERED_CHAT_TTL_MS = 60_000;
+
 function trimString(value?: string | null): string | undefined {
   const trimmed = String(value || "").trim();
   return trimmed || undefined;
@@ -317,6 +329,38 @@ export async function listMaxAllowedUsers(
   return result;
 }
 
+export async function getMaxRegisteredChat(
+  logger: LoggerConfig | null,
+  chatId: string | number
+): Promise<RegisteredChat | null> {
+  if (!logger) {
+    return null;
+  }
+
+  const numericChatId = Number(chatId);
+  if (!Number.isFinite(numericChatId)) {
+    return null;
+  }
+
+  const cacheKey = `${logger.schema}:${numericChatId}`;
+  const cached = registeredChatCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const rows = await postgrestRead<RegisteredChat[]>(
+    logger,
+    `chats?select=chat_id,chat_name,chat_tag,chat_type,is_admin,is_active&chat_id=eq.${numericChatId}&limit=1`
+  );
+  const value = rows[0] || null;
+  registeredChatCache.set(cacheKey, {
+    expiresAt: now + REGISTERED_CHAT_TTL_MS,
+    value,
+  });
+  return value;
+}
+
 export function buildUserRecord(params: {
   user?: MaxUser;
   chatId?: string | number;
@@ -347,6 +391,9 @@ export function buildInboundLogRecord(params: {
   agentId: string;
   chatType?: string;
   chatScopeKey?: string;
+  chatTag?: string | null;
+  chatName?: string | null;
+  isAdminChat?: boolean | null;
   rawPayload: MaxUpdate | Record<string, unknown>;
 }): InteractionLogRecord {
   return {
@@ -368,6 +415,9 @@ export function buildInboundLogRecord(params: {
       agentId: params.agentId,
       chatType: params.chatType || null,
       chatScopeKey: params.chatScopeKey || null,
+      chatTag: params.chatTag || null,
+      chatName: params.chatName || null,
+      isAdminChat: params.isAdminChat ?? null,
       sessionKey: params.sessionId || null,
       source: "max",
     },
@@ -384,6 +434,9 @@ export function buildOutboundLogRecord(params: {
   agentId: string;
   chatType?: string;
   chatScopeKey?: string;
+  chatTag?: string | null;
+  chatName?: string | null;
+  isAdminChat?: boolean | null;
   rawPayload: Record<string, unknown>;
 }): InteractionLogRecord {
   return {
@@ -405,6 +458,9 @@ export function buildOutboundLogRecord(params: {
       agentId: params.agentId,
       chatType: params.chatType || null,
       chatScopeKey: params.chatScopeKey || null,
+      chatTag: params.chatTag || null,
+      chatName: params.chatName || null,
+      isAdminChat: params.isAdminChat ?? null,
       sessionKey: params.sessionId || null,
       source: "max",
     },

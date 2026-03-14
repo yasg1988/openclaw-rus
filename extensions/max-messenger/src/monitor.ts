@@ -5,6 +5,7 @@ import {
   buildInboundLogRecord,
   buildOutboundLogRecord,
   buildUserRecord,
+  getMaxRegisteredChat,
   isMaxUserAllowed,
   isMaxChatAllowed,
   insertMaxInteractionLog,
@@ -218,6 +219,9 @@ async function logMaxInbound(
     agentId: string;
     chatType?: string;
     chatScopeKey?: string;
+    chatTag?: string | null;
+    chatName?: string | null;
+    isAdminChat?: boolean | null;
     rawPayload: MaxUpdate | Record<string, unknown>;
     sessionId?: string;
   }
@@ -234,6 +238,9 @@ async function logMaxInbound(
       agentId: params.agentId,
       chatType: params.chatType,
       chatScopeKey: params.chatScopeKey,
+      chatTag: params.chatTag,
+      chatName: params.chatName,
+      isAdminChat: params.isAdminChat,
       rawPayload: params.rawPayload,
     })
   );
@@ -250,6 +257,9 @@ async function logMaxOutbound(
     agentId: string;
     chatType?: string;
     chatScopeKey?: string;
+    chatTag?: string | null;
+    chatName?: string | null;
+    isAdminChat?: boolean | null;
     rawPayload: Record<string, unknown>;
     sessionId?: string;
   }
@@ -266,6 +276,9 @@ async function logMaxOutbound(
       agentId: params.agentId,
       chatType: params.chatType,
       chatScopeKey: params.chatScopeKey,
+      chatTag: params.chatTag,
+      chatName: params.chatName,
+      isAdminChat: params.isAdminChat,
       rawPayload: params.rawPayload,
     })
   );
@@ -406,6 +419,7 @@ async function dispatchToOpenClaw(params: {
   const chatScopeKey = deriveChatScopeKey(opts.accountId, chatType, chatId, senderId);
   const account = resolveMaxAccount(config, opts.accountId);
   const logger = resolveLoggerConfig(account);
+  const registeredChat = chatType === "group" ? await getMaxRegisteredChat(logger, chatId) : null;
   const allowFrom = (account.config.allowFrom ?? []).map(String);
   const dmPolicy = String(account.config.dmPolicy || "pairing");
   const directUserAllowlistTable = String(account.config.directUserAllowlistTable || "").trim();
@@ -434,6 +448,9 @@ async function dispatchToOpenClaw(params: {
               agentId: "unauthorized",
               chatType,
               chatScopeKey,
+              chatTag: registeredChat?.chat_tag || null,
+              chatName: registeredChat?.chat_name || null,
+              isAdminChat: registeredChat?.is_admin ?? null,
               rawPayload: rawUpdate || { text, senderId, chatId, chatType },
             })
           );
@@ -454,6 +471,9 @@ async function dispatchToOpenClaw(params: {
               agentId: "unauthorized",
               chatType,
               chatScopeKey,
+              chatTag: registeredChat?.chat_tag || null,
+              chatName: registeredChat?.chat_name || null,
+              isAdminChat: registeredChat?.is_admin ?? null,
               rawPayload: {
                 reason: "user_not_in_allowlist",
                 userId: senderId,
@@ -512,6 +532,9 @@ async function dispatchToOpenClaw(params: {
             agentId: "admin_tool",
             chatType,
             chatScopeKey,
+            chatTag: registeredChat?.chat_tag || null,
+            chatName: registeredChat?.chat_name || null,
+            isAdminChat: registeredChat?.is_admin ?? null,
             rawPayload: rawUpdate || { text, senderId, chatId, chatType },
           });
         } catch (error) {
@@ -547,6 +570,9 @@ async function dispatchToOpenClaw(params: {
             agentId: "admin_tool",
             chatType,
             chatScopeKey,
+            chatTag: registeredChat?.chat_tag || null,
+            chatName: registeredChat?.chat_name || null,
+            isAdminChat: registeredChat?.is_admin ?? null,
             rawPayload: {
               action: adminIntent.action,
               userId: "userId" in adminIntent ? adminIntent.userId : null,
@@ -649,6 +675,9 @@ async function dispatchToOpenClaw(params: {
       agentId: route.agentId,
       chatType,
       chatScopeKey,
+      chatTag: registeredChat?.chat_tag || null,
+      chatName: registeredChat?.chat_name || null,
+      isAdminChat: registeredChat?.is_admin ?? null,
       rawPayload: rawUpdate || { text, senderId, chatId, chatType },
     });
   } catch (error) {
@@ -713,6 +742,9 @@ async function dispatchToOpenClaw(params: {
                 agentId: route.agentId,
                 chatType,
                 chatScopeKey,
+                chatTag: registeredChat?.chat_tag || null,
+                chatName: registeredChat?.chat_name || null,
+                isAdminChat: registeredChat?.is_admin ?? null,
                 rawPayload: {
                   messageId: mid || null,
                   payload,
