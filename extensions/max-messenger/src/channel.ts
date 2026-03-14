@@ -20,6 +20,7 @@ export interface MaxChannelConfig {
   supabaseServiceKey?: string;
   logSchema?: string;
   directUserAllowlistTable?: string;
+  adminChatTable?: string;
   allowFrom?: Array<string | number>;
   dmPolicy?: string;
   defaultTo?: string;

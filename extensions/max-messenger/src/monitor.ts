@@ -1,11 +1,15 @@
 import type { ChannelAccountSnapshot, OpenClawConfig, PluginRuntime } from "openclaw/plugin-sdk";
 import { MaxBotApi, type MaxBotInfo, type MaxUpdate } from "./api.js";
 import {
+  addMaxAllowedUser,
   buildInboundLogRecord,
   buildOutboundLogRecord,
   buildUserRecord,
   isMaxUserAllowed,
+  isMaxChatAllowed,
   insertMaxInteractionLog,
+  listMaxAllowedUsers,
+  removeMaxAllowedUser,
   resolveLoggerConfig,
   upsertMaxUser,
 } from "./logging.js";
@@ -14,6 +18,14 @@ import { getMaxRuntime } from "./runtime.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
+const ADMIN_LIST_RE = /\b(список|покажи|показать|кто)\b/i;
+const ADMIN_ADD_RE = /\b(добав|разреш|открой|дай\s+доступ|предостав)\b/i;
+const ADMIN_REMOVE_RE = /\b(удал|убер|запрет|закрой\s+доступ|исключ|сними\s+доступ)\b/i;
+
+type AdminIntent =
+  | { action: "list" }
+  | { action: "add"; userId: number }
+  | { action: "remove"; userId: number };
 
 export interface MaxMonitorOptions {
   token: string;
@@ -78,6 +90,106 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
 
 function sanitizeOutboundText(text: string): string {
   return text.replace(REPLY_DIRECTIVE_TAG_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function parseOperatorAdminIntent(text: string): AdminIntent | null {
+  const normalized = text.trim();
+  const lowered = normalized.toLowerCase();
+  const idMatch = lowered.match(/(?<!\d)-?\d{5,}(?!\d)/);
+  const userId = idMatch ? Number(idMatch[0]) : null;
+  const listLike =
+    ADMIN_LIST_RE.test(lowered) &&
+    /(доступ|списке|список|может\s+писать|пишет\s+боту|allowed|allowlist)/i.test(lowered);
+
+  if (listLike) {
+    return { action: "list" };
+  }
+
+  if (userId && ADMIN_ADD_RE.test(lowered)) {
+    return { action: "add", userId };
+  }
+
+  if (userId && ADMIN_REMOVE_RE.test(lowered)) {
+    return { action: "remove", userId };
+  }
+
+  return null;
+}
+
+function formatAllowedUsersList(rows: Array<{
+  user_id: number;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}>): string {
+  if (!rows.length) {
+    return "Список доступа пуст.";
+  }
+
+  const lines = rows.map((row, index) => {
+    const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
+    const username = row.username ? `@${row.username}` : "без username";
+    const label = name || "без имени";
+    return `${index + 1}. ${row.user_id} — ${username} — ${label}`;
+  });
+
+  return `Сейчас доступ к личке Оператора есть у:\n${lines.join("\n")}`;
+}
+
+async function logMaxInbound(
+  logger: ReturnType<typeof resolveLoggerConfig>,
+  params: {
+    user?: MaxUpdate["user"];
+    chatId: string;
+    text: string;
+    eventType: string;
+    accountId: string;
+    agentId: string;
+    rawPayload: MaxUpdate | Record<string, unknown>;
+    sessionId?: string;
+  }
+) {
+  await insertMaxInteractionLog(
+    logger,
+    buildInboundLogRecord({
+      user: params.user,
+      chatId: params.chatId,
+      text: params.text,
+      eventType: params.eventType,
+      sessionId: params.sessionId,
+      accountId: params.accountId,
+      agentId: params.agentId,
+      rawPayload: params.rawPayload,
+    })
+  );
+}
+
+async function logMaxOutbound(
+  logger: ReturnType<typeof resolveLoggerConfig>,
+  params: {
+    user?: MaxUpdate["user"];
+    chatId: string;
+    text: string;
+    eventType: string;
+    accountId: string;
+    agentId: string;
+    rawPayload: Record<string, unknown>;
+    sessionId?: string;
+  }
+) {
+  await insertMaxInteractionLog(
+    logger,
+    buildOutboundLogRecord({
+      user: params.user,
+      chatId: params.chatId,
+      text: params.text,
+      eventType: params.eventType,
+      sessionId: params.sessionId,
+      accountId: params.accountId,
+      agentId: params.agentId,
+      rawPayload: params.rawPayload,
+    })
+  );
 }
 
 async function handleUpdate(
@@ -187,6 +299,7 @@ async function dispatchToOpenClaw(params: {
   const allowFrom = (account.config.allowFrom ?? []).map(String);
   const dmPolicy = String(account.config.dmPolicy || "pairing");
   const directUserAllowlistTable = String(account.config.directUserAllowlistTable || "").trim();
+  const adminChatTable = String(account.config.adminChatTable || "").trim();
 
   if (chatType === "direct" && directUserAllowlistTable) {
     try {
@@ -255,6 +368,85 @@ async function dispatchToOpenClaw(params: {
       text: "⛔ Доступ ограничен. Обратитесь к администратору.",
     });
     return;
+  }
+
+  const adminIntent = parseOperatorAdminIntent(text);
+  if (chatType === "group" && adminChatTable && adminIntent) {
+    try {
+      const isAdminChat = await isMaxChatAllowed(logger, adminChatTable, chatId);
+      if (isAdminChat) {
+        const userRecord = buildUserRecord({
+          user: senderUser,
+          chatId,
+        });
+        if (userRecord) {
+          try {
+            await upsertMaxUser(logger, userRecord);
+          } catch (error) {
+            console.error("[max] user upsert error:", error);
+          }
+        }
+
+        try {
+          await logMaxInbound(logger, {
+            user: senderUser,
+            chatId,
+            text,
+            eventType: "admin_command",
+            sessionId: undefined,
+            accountId: opts.accountId,
+            agentId: "admin_tool",
+            rawPayload: rawUpdate || { text, senderId, chatId, chatType },
+          });
+        } catch (error) {
+          console.error("[max] inbound log error:", error);
+        }
+
+        let replyText = "";
+        if (adminIntent.action === "add") {
+          await addMaxAllowedUser(logger, directUserAllowlistTable, adminIntent.userId);
+          replyText = `Добавил user_id ${adminIntent.userId} в доступ к личке Оператора.`;
+        } else if (adminIntent.action === "remove") {
+          await removeMaxAllowedUser(logger, directUserAllowlistTable, adminIntent.userId);
+          replyText = `Удалил user_id ${adminIntent.userId} из доступа к личке Оператора.`;
+        } else {
+          const rows = await listMaxAllowedUsers(logger, directUserAllowlistTable);
+          replyText = formatAllowedUsersList(rows);
+        }
+
+        await api.sendMessage({
+          chatId: Number(chatId),
+          text: replyText,
+          format: "markdown",
+        });
+
+        try {
+          await logMaxOutbound(logger, {
+            user: senderUser,
+            chatId,
+            text: replyText,
+            eventType: `admin_${adminIntent.action}`,
+            sessionId: undefined,
+            accountId: opts.accountId,
+            agentId: "admin_tool",
+            rawPayload: {
+              action: adminIntent.action,
+              userId: "userId" in adminIntent ? adminIntent.userId : null,
+            },
+          });
+        } catch (error) {
+          console.error("[max] outbound log error:", error);
+        }
+        return;
+      }
+    } catch (error) {
+      console.error("[max] admin tool error:", error);
+      await api.sendMessage({
+        chatId: Number(chatId),
+        text: "⚠️ Не удалось выполнить админ-команду. Попробуйте позже.",
+      });
+      return;
+    }
   }
 
   const route = core.channel.routing.resolveAgentRoute({
@@ -329,19 +521,16 @@ async function dispatchToOpenClaw(params: {
   }
 
   try {
-    await insertMaxInteractionLog(
-      logger,
-      buildInboundLogRecord({
-        user: senderUser,
-        chatId,
-        text,
-        eventType: rawUpdate?.update_type || "message_created",
-        sessionId: route.sessionKey,
-        accountId: opts.accountId,
-        agentId: route.agentId,
-        rawPayload: rawUpdate || { text, senderId, chatId, chatType },
-      })
-    );
+    await logMaxInbound(logger, {
+      user: senderUser,
+      chatId,
+      text,
+      eventType: rawUpdate?.update_type || "message_created",
+      sessionId: route.sessionKey,
+      accountId: opts.accountId,
+      agentId: route.agentId,
+      rawPayload: rawUpdate || { text, senderId, chatId, chatType },
+    });
   } catch (error) {
     console.error("[max] inbound log error:", error);
   }
@@ -394,23 +583,20 @@ async function dispatchToOpenClaw(params: {
             }
 
             try {
-              await insertMaxInteractionLog(
-                logger,
-                buildOutboundLogRecord({
-                  user: senderUser,
-                  chatId,
-                  text: replyText,
-                  eventType: "message",
-                  sessionId: route.sessionKey,
-                  accountId: opts.accountId,
-                  agentId: route.agentId,
-                  rawPayload: {
-                    messageId: mid || null,
-                    payload,
-                    mode: "send",
-                  },
-                })
-              );
+              await logMaxOutbound(logger, {
+                user: senderUser,
+                chatId,
+                text: replyText,
+                eventType: "message",
+                sessionId: route.sessionKey,
+                accountId: opts.accountId,
+                agentId: route.agentId,
+                rawPayload: {
+                  messageId: mid || null,
+                  payload,
+                  mode: "send",
+                },
+              });
             } catch (error) {
               console.error("[max] outbound log error:", error);
             }

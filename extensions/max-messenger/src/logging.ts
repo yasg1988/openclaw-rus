@@ -32,6 +32,14 @@ type InteractionLogRecord = {
   metadata?: Record<string, unknown> | null;
 };
 
+type AllowedUserProfile = {
+  user_id: number;
+  username?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  last_seen_at?: string | null;
+};
+
 function trimString(value?: string | null): string | undefined {
   const trimmed = String(value || "").trim();
   return trimmed || undefined;
@@ -101,6 +109,26 @@ async function postgrestRead<T = unknown>(
   return (await res.json()) as T;
 }
 
+async function postgrestDelete(
+  logger: LoggerConfig,
+  tableQuery: string
+): Promise<void> {
+  const res = await fetch(`${logger.supabaseUrl}/rest/v1/${tableQuery}`, {
+    method: "DELETE",
+    headers: {
+      apikey: logger.serviceRoleKey,
+      Authorization: `Bearer ${logger.serviceRoleKey}`,
+      "Content-Profile": logger.schema,
+      Prefer: "return=minimal",
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`PostgREST delete failed (${tableQuery}): ${res.status} ${res.statusText} ${errorText}`);
+  }
+}
+
 export async function upsertMaxUser(
   logger: LoggerConfig | null,
   user: UserRecord
@@ -149,6 +177,114 @@ export async function isMaxUserAllowed(
   );
 
   return rows.length > 0;
+}
+
+export async function isMaxChatAllowed(
+  logger: LoggerConfig | null,
+  table: string | null | undefined,
+  chatId: string | number
+): Promise<boolean> {
+  if (!logger) {
+    return false;
+  }
+
+  const tableName = trimString(table);
+  const numericChatId = Number(chatId);
+  if (!tableName || !Number.isFinite(numericChatId)) {
+    return false;
+  }
+
+  const rows = await postgrestRead<Array<{ chat_id?: number }>>(
+    logger,
+    `${tableName}?select=chat_id&chat_id=eq.${numericChatId}&limit=1`
+  );
+
+  return rows.length > 0;
+}
+
+export async function addMaxAllowedUser(
+  logger: LoggerConfig | null,
+  table: string | null | undefined,
+  userId: string | number
+): Promise<void> {
+  if (!logger) {
+    return;
+  }
+
+  const tableName = trimString(table);
+  const numericUserId = Number(userId);
+  if (!tableName || !Number.isFinite(numericUserId)) {
+    throw new Error("Invalid allowlist target user_id");
+  }
+
+  await postgrestWrite(
+    logger,
+    `${tableName}?on_conflict=user_id`,
+    [{ user_id: numericUserId }],
+    "resolution=ignore-duplicates,return=minimal"
+  );
+}
+
+export async function removeMaxAllowedUser(
+  logger: LoggerConfig | null,
+  table: string | null | undefined,
+  userId: string | number
+): Promise<void> {
+  if (!logger) {
+    return;
+  }
+
+  const tableName = trimString(table);
+  const numericUserId = Number(userId);
+  if (!tableName || !Number.isFinite(numericUserId)) {
+    throw new Error("Invalid allowlist target user_id");
+  }
+
+  await postgrestDelete(logger, `${tableName}?user_id=eq.${numericUserId}`);
+}
+
+export async function listMaxAllowedUsers(
+  logger: LoggerConfig | null,
+  table: string | null | undefined
+): Promise<AllowedUserProfile[]> {
+  if (!logger) {
+    return [];
+  }
+
+  const tableName = trimString(table);
+  if (!tableName) {
+    return [];
+  }
+
+  const rows = await postgrestRead<Array<{ user_id?: number }>>(
+    logger,
+    `${tableName}?select=user_id&order=created_at.asc`
+  );
+  const userIds = Array.from(
+    new Set(
+      rows
+        .map((row) => Number(row.user_id))
+        .filter((value) => Number.isFinite(value))
+    )
+  );
+
+  const result: AllowedUserProfile[] = [];
+  for (const userId of userIds) {
+    const profiles = await postgrestRead<Array<AllowedUserProfile>>(
+      logger,
+      `users?select=user_id,username,first_name,last_name,last_seen_at&user_id=eq.${userId}&order=last_seen_at.desc&limit=1`
+    );
+
+    result.push({
+      user_id: userId,
+      username: profiles[0]?.username || null,
+      first_name: profiles[0]?.first_name || null,
+      last_name: profiles[0]?.last_name || null,
+      last_seen_at: profiles[0]?.last_seen_at || null,
+    });
+  }
+
+  return result;
 }
 
 export function buildUserRecord(params: {
