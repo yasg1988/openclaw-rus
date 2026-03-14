@@ -48,6 +48,7 @@ export type PublicSafetyDecision =
         | "prompt_injection"
         | "internal_access_attempt";
       attachments?: unknown[];
+      nodeId?: string;
     };
 
 type PublicMenuNode = {
@@ -257,6 +258,14 @@ export function sanitizePublicOutbound(text: string): string {
     return "Я могу отвечать только по безопасным пользовательским сценариям Городского радара.";
   }
   return text.trim();
+}
+
+export function isLifeSituationsLeafNode(nodeId?: string | null): boolean {
+  if (!nodeId || !nodeId.startsWith("ls:")) {
+    return false;
+  }
+  const found = findMenuNode(nodeId);
+  return Boolean(found && !found.node.children?.length);
 }
 
 export const PUBLIC_MAIN_MENU_TEXT =
@@ -742,6 +751,7 @@ function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
     reasonCode: "life_situations",
     reply: buildLeafReply(found.node, found.parent),
     attachments: buildMenuAttachments(found.node, found.parent),
+    nodeId: found.node.id,
   };
 }
 
