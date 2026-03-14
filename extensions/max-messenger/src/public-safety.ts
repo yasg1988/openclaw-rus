@@ -138,10 +138,6 @@ function containsMenuKeyword(text: string): boolean {
   );
 }
 
-function isExactToken(text: string, tokens: readonly string[]): boolean {
-  return tokens.includes(text);
-}
-
 function isGreeting(text: string): boolean {
   return hasAny(text, ["привет", "здравств", "добрый день", "добрый вечер", "доброе утро", "/start"]) || containsMenuKeyword(text);
 }
@@ -187,7 +183,7 @@ function isMapHelp(text: string): boolean {
 }
 
 function isReportProblem(text: string): boolean {
-  return isExactToken(text, ["1", "01"]) || hasAny(text, [
+  return hasAny(text, [
     "сообщить об ошибке",
     "ошибка на карте",
     "неточност",
@@ -200,7 +196,7 @@ function isReportProblem(text: string): boolean {
 }
 
 function isChatOperator(text: string): boolean {
-  return isExactToken(text, ["7", "07"]) || hasAny(text, [
+  return hasAny(text, [
     "связаться с оператором",
     "написать оператору",
     "чат с оператором",
@@ -211,7 +207,7 @@ function isChatOperator(text: string): boolean {
 }
 
 function isMyRequests(text: string): boolean {
-  return isExactToken(text, ["2", "02"]) || hasAny(text, [
+  return hasAny(text, [
     "мои обращения",
     "мои заявки",
     "мои сообщения",
@@ -222,7 +218,7 @@ function isMyRequests(text: string): boolean {
 }
 
 function isBookAppointment(text: string): boolean {
-  return isExactToken(text, ["5", "05"]) || hasAny(text, [
+  return hasAny(text, [
     "запись на прием",
     "записаться на прием",
     "категории записи на прием",
@@ -232,15 +228,15 @@ function isBookAppointment(text: string): boolean {
 }
 
 function isLifeSituations(text: string): boolean {
-  return isExactToken(text, ["4", "04"]) || hasAny(text, ["жизненные ситуации", "жизненная ситуация"]);
+  return hasAny(text, ["жизненные ситуации", "жизненная ситуация"]);
 }
 
 function isManagementCompany(text: string): boolean {
-  return isExactToken(text, ["3", "03"]) || hasAny(text, ["связь с ук", "управляющ", "ук"]);
+  return hasAny(text, ["связь с ук", "управляющ", "ук"]);
 }
 
 function isForbiddenSigns(text: string): boolean {
-  return isExactToken(text, ["6", "06"]) || hasAny(text, ["запрещенные надписи", "запрещённые надписи", "надписи", "граффити"]);
+  return hasAny(text, ["запрещенные надписи", "запрещённые надписи", "надписи", "граффити"]);
 }
 
 function formatUnknownReply(): string {
@@ -258,17 +254,7 @@ export function sanitizePublicOutbound(text: string): string {
 export const PUBLIC_MAIN_MENU_TEXT =
   "Городской Радар — ИИ-отдел Администрации Йошкар-Олы.\n\n" +
   "Принимаем сигналы о городских проблемах, консультируем по вопросам благоустройства, связываем с управляющими компаниями.\n\n" +
-  "Напишите сообщение или выберите пункт меню.\n\n" +
-  "Если кнопки не сработали, можно написать номер пункта:\n" +
-  "1. Сообщить о проблеме\n" +
-  "2. Мои обращения\n" +
-  "3. Связь с УК\n" +
-  "4. Жизненные ситуации\n" +
-  "5. Запись на прием в мэрию\n" +
-  "6. Запрещенные надписи\n" +
-  "7. Оператор\n" +
-  "8. О проекте\n" +
-  "9. Помощь";
+  "Напишите сообщение или выберите пункт меню";
 
 export function buildPublicMainMenuAttachments(imageToken?: string | null): unknown[] {
   const buttons = [
@@ -352,17 +338,6 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
   }
 
   if (isServiceInfo(normalized)) {
-    return {
-      kind: "reply",
-      intent: "service_info",
-      eventType: "public_safe_reply",
-      reasonCode: "service_info",
-      reply:
-        "Городской радар — это городской сервис с картой и данными по объектам и инфраструктуре. Через него можно искать адреса и ориентироваться по доступным слоям и городским данным.",
-    };
-  }
-
-  if (isExactToken(normalized, ["8", "08"])) {
     return {
       kind: "reply",
       intent: "service_info",
@@ -468,16 +443,6 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
       eventType: "public_refusal",
       reasonCode: "help",
       reply: formatUnknownReply(),
-    };
-  }
-
-  if (isExactToken(normalized, ["9", "09"])) {
-    return {
-      kind: "menu",
-      intent: "help",
-      eventType: "public_safe_reply",
-      reasonCode: "help",
-      reply: PUBLIC_MAIN_MENU_TEXT,
     };
   }
 
