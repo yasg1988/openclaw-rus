@@ -129,6 +129,29 @@ async function postgrestDelete(
   }
 }
 
+async function postgrestRpc(
+  logger: LoggerConfig,
+  fn: string,
+  body: unknown
+): Promise<void> {
+  const res = await fetch(`${logger.supabaseUrl}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      apikey: logger.serviceRoleKey,
+      Authorization: `Bearer ${logger.serviceRoleKey}`,
+      "Content-Type": "application/json",
+      "Content-Profile": logger.schema,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`PostgREST rpc failed (${fn}): ${res.status} ${res.statusText} ${errorText}`);
+  }
+}
+
 export async function upsertMaxUser(
   logger: LoggerConfig | null,
   user: UserRecord
@@ -238,6 +261,13 @@ export async function removeMaxAllowedUser(
   const numericUserId = Number(userId);
   if (!tableName || !Number.isFinite(numericUserId)) {
     throw new Error("Invalid allowlist target user_id");
+  }
+
+  if (tableName === "allowed_users") {
+    await postgrestRpc(logger, "remove_allowed_user", {
+      target_user_id: numericUserId,
+    });
+    return;
   }
 
   await postgrestDelete(logger, `${tableName}?user_id=eq.${numericUserId}`);
