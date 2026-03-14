@@ -57,6 +57,10 @@ function deriveUpdateConcurrencyKey(update: MaxUpdate, accountId: string): strin
   return `${accountId}:update:${update.update_type}:${update.timestamp ?? Date.now()}`;
 }
 
+function deriveChatScopeKey(accountId: string, chatType: "direct" | "group", chatId: string, senderId: string): string {
+  return `${accountId}:${chatType}:${chatType === "group" ? chatId : senderId}`;
+}
+
 export async function monitorMaxProvider(opts: MaxMonitorOptions) {
   const core = getMaxRuntime();
   const api = new MaxBotApi({
@@ -212,6 +216,8 @@ async function logMaxInbound(
     eventType: string;
     accountId: string;
     agentId: string;
+    chatType?: string;
+    chatScopeKey?: string;
     rawPayload: MaxUpdate | Record<string, unknown>;
     sessionId?: string;
   }
@@ -226,6 +232,8 @@ async function logMaxInbound(
       sessionId: params.sessionId,
       accountId: params.accountId,
       agentId: params.agentId,
+      chatType: params.chatType,
+      chatScopeKey: params.chatScopeKey,
       rawPayload: params.rawPayload,
     })
   );
@@ -240,6 +248,8 @@ async function logMaxOutbound(
     eventType: string;
     accountId: string;
     agentId: string;
+    chatType?: string;
+    chatScopeKey?: string;
     rawPayload: Record<string, unknown>;
     sessionId?: string;
   }
@@ -254,6 +264,8 @@ async function logMaxOutbound(
       sessionId: params.sessionId,
       accountId: params.accountId,
       agentId: params.agentId,
+      chatType: params.chatType,
+      chatScopeKey: params.chatScopeKey,
       rawPayload: params.rawPayload,
     })
   );
@@ -391,6 +403,7 @@ async function dispatchToOpenClaw(params: {
   const { text, senderId, senderName, chatId, chatType, hasVoiceAttachment = false, api, opts, core, rawUpdate, senderUser } = params;
   const config = opts.config;
   const peerId = chatType === "group" ? chatId : senderId;
+  const chatScopeKey = deriveChatScopeKey(opts.accountId, chatType, chatId, senderId);
   const account = resolveMaxAccount(config, opts.accountId);
   const logger = resolveLoggerConfig(account);
   const allowFrom = (account.config.allowFrom ?? []).map(String);
@@ -419,6 +432,8 @@ async function dispatchToOpenClaw(params: {
               sessionId: undefined,
               accountId: opts.accountId,
               agentId: "unauthorized",
+              chatType,
+              chatScopeKey,
               rawPayload: rawUpdate || { text, senderId, chatId, chatType },
             })
           );
@@ -437,6 +452,8 @@ async function dispatchToOpenClaw(params: {
               sessionId: undefined,
               accountId: opts.accountId,
               agentId: "unauthorized",
+              chatType,
+              chatScopeKey,
               rawPayload: {
                 reason: "user_not_in_allowlist",
                 userId: senderId,
@@ -493,6 +510,8 @@ async function dispatchToOpenClaw(params: {
             sessionId: undefined,
             accountId: opts.accountId,
             agentId: "admin_tool",
+            chatType,
+            chatScopeKey,
             rawPayload: rawUpdate || { text, senderId, chatId, chatType },
           });
         } catch (error) {
@@ -526,6 +545,8 @@ async function dispatchToOpenClaw(params: {
             sessionId: undefined,
             accountId: opts.accountId,
             agentId: "admin_tool",
+            chatType,
+            chatScopeKey,
             rawPayload: {
               action: adminIntent.action,
               userId: "userId" in adminIntent ? adminIntent.userId : null,
@@ -626,6 +647,8 @@ async function dispatchToOpenClaw(params: {
       sessionId: route.sessionKey,
       accountId: opts.accountId,
       agentId: route.agentId,
+      chatType,
+      chatScopeKey,
       rawPayload: rawUpdate || { text, senderId, chatId, chatType },
     });
   } catch (error) {
@@ -688,6 +711,8 @@ async function dispatchToOpenClaw(params: {
                 sessionId: route.sessionKey,
                 accountId: opts.accountId,
                 agentId: route.agentId,
+                chatType,
+                chatScopeKey,
                 rawPayload: {
                   messageId: mid || null,
                   payload,

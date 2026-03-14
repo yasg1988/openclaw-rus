@@ -345,6 +345,8 @@ export function buildInboundLogRecord(params: {
   sessionId?: string;
   accountId: string;
   agentId: string;
+  chatType?: string;
+  chatScopeKey?: string;
   rawPayload: MaxUpdate | Record<string, unknown>;
 }): InteractionLogRecord {
   return {
@@ -359,8 +361,14 @@ export function buildInboundLogRecord(params: {
     raw_payload: params.rawPayload,
     session_id: params.sessionId || null,
     metadata: {
+      channel: "max",
+      surface: "max",
+      provider: "max",
       accountId: params.accountId,
       agentId: params.agentId,
+      chatType: params.chatType || null,
+      chatScopeKey: params.chatScopeKey || null,
+      sessionKey: params.sessionId || null,
       source: "max",
     },
   };
@@ -374,6 +382,8 @@ export function buildOutboundLogRecord(params: {
   sessionId?: string;
   accountId: string;
   agentId: string;
+  chatType?: string;
+  chatScopeKey?: string;
   rawPayload: Record<string, unknown>;
 }): InteractionLogRecord {
   return {
@@ -388,8 +398,14 @@ export function buildOutboundLogRecord(params: {
     raw_payload: params.rawPayload,
     session_id: params.sessionId || null,
     metadata: {
+      channel: "max",
+      surface: "max",
+      provider: "max",
       accountId: params.accountId,
       agentId: params.agentId,
+      chatType: params.chatType || null,
+      chatScopeKey: params.chatScopeKey || null,
+      sessionKey: params.sessionId || null,
       source: "max",
     },
   };
