@@ -130,8 +130,16 @@ function hasAll(text: string, parts: readonly string[]): boolean {
   return parts.every((part) => text.includes(part));
 }
 
+function containsMenuKeyword(text: string): boolean {
+  return (
+    text.includes("меню") ||
+    text.includes("vty.") ||
+    text.includes("vty/")
+  );
+}
+
 function isGreeting(text: string): boolean {
-  return hasAny(text, ["привет", "здравств", "добрый день", "добрый вечер", "доброе утро", "/start", "меню"]);
+  return hasAny(text, ["привет", "здравств", "добрый день", "добрый вечер", "доброе утро", "/start"]) || containsMenuKeyword(text);
 }
 
 function isIdentityQuestion(text: string): boolean {
