@@ -90,6 +90,11 @@ function sanitizeOutboundText(text: string): string {
   return text.replace(REPLY_DIRECTIVE_TAG_RE, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function deriveInboundEventType(updateType: string | undefined, hasVoiceAttachment: boolean): string {
+  const base = updateType || "message_created";
+  return hasVoiceAttachment ? `voice_${base}` : base;
+}
+
 function parseOperatorAdminIntent(text: string): AdminIntent | null {
   const normalized = text.trim();
   const lowered = normalized.toLowerCase();
@@ -241,6 +246,7 @@ async function handleUpdate(
       senderName,
       chatId: String(chatId),
       chatType: "direct",
+      hasVoiceAttachment: false,
       rawUpdate: update,
       senderUser: update.user,
       ...ctx,
@@ -267,6 +273,7 @@ async function handleUpdate(
       senderName,
       chatId: String(chatId),
       chatType: "direct",
+      hasVoiceAttachment: false,
       rawUpdate: update,
       senderUser: update.callback.user,
       ...ctx,
@@ -282,6 +289,7 @@ async function handleUpdate(
   const senderId = message.sender?.user_id;
   const chatId = message.recipient?.chat_id;
   const attachments = (message.body?.attachments as unknown[]) || [];
+  const hasVoiceAttachment = attachments.some((attachment: any) => attachment?.type === "audio");
   let text = message.body?.text || "";
   const senderName =
     message.sender?.first_name || message.sender?.name || message.sender?.username || String(senderId);
@@ -321,6 +329,7 @@ async function handleUpdate(
     senderName,
     chatId: String(chatId),
     chatType,
+    hasVoiceAttachment,
     rawUpdate: update,
     senderUser: message.sender,
     ...ctx,
@@ -333,6 +342,7 @@ async function dispatchToOpenClaw(params: {
   senderName: string;
   chatId: string;
   chatType: "direct" | "group";
+  hasVoiceAttachment?: boolean;
   api: MaxBotApi;
   botInfo: MaxBotInfo;
   opts: MaxMonitorOptions;
@@ -340,7 +350,7 @@ async function dispatchToOpenClaw(params: {
   rawUpdate?: MaxUpdate;
   senderUser?: MaxUpdate["user"];
 }) {
-  const { text, senderId, senderName, chatId, chatType, api, opts, core, rawUpdate, senderUser } = params;
+  const { text, senderId, senderName, chatId, chatType, hasVoiceAttachment = false, api, opts, core, rawUpdate, senderUser } = params;
   const config = opts.config;
   const peerId = chatType === "group" ? chatId : senderId;
   const account = resolveMaxAccount(config, opts.accountId);
@@ -367,7 +377,7 @@ async function dispatchToOpenClaw(params: {
               user: senderUser,
               chatId,
               text,
-              eventType: `${rawUpdate?.update_type || "message_created"}:denied`,
+              eventType: `${deriveInboundEventType(rawUpdate?.update_type, hasVoiceAttachment)}:denied`,
               sessionId: undefined,
               accountId: opts.accountId,
               agentId: "unauthorized",
@@ -441,7 +451,7 @@ async function dispatchToOpenClaw(params: {
             user: senderUser,
             chatId,
             text,
-            eventType: "admin_command",
+            eventType: hasVoiceAttachment ? "admin_voice_command" : "admin_command",
             sessionId: undefined,
             accountId: opts.accountId,
             agentId: "admin_tool",
@@ -574,7 +584,7 @@ async function dispatchToOpenClaw(params: {
       user: senderUser,
       chatId,
       text,
-      eventType: rawUpdate?.update_type || "message_created",
+      eventType: deriveInboundEventType(rawUpdate?.update_type, hasVoiceAttachment),
       sessionId: route.sessionKey,
       accountId: opts.accountId,
       agentId: route.agentId,
