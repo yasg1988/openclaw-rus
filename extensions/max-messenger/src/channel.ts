@@ -16,6 +16,9 @@ export interface MaxChannelConfig {
   enabled?: boolean;
   botToken?: string;
   apiBaseUrl?: string;
+  supabaseUrl?: string;
+  supabaseServiceKey?: string;
+  logSchema?: string;
   allowFrom?: Array<string | number>;
   dmPolicy?: string;
   defaultTo?: string;
@@ -93,7 +96,7 @@ function resolveAccountToken(accountId: string, accountCfg: MaxChannelConfig): {
   return { token, tokenSource };
 }
 
-function resolveMaxAccount(cfg: OpenClawConfig, accountId?: string | null): ResolvedMaxAccount {
+export function resolveMaxAccount(cfg: OpenClawConfig, accountId?: string | null): ResolvedMaxAccount {
   const resolvedAccountId = String(accountId || resolveDefaultMaxAccountId(cfg)).trim() || DEFAULT_ACCOUNT_ID;
   const accountCfg = readMaxAccountConfig(cfg, resolvedAccountId);
   const { token, tokenSource } = resolveAccountToken(resolvedAccountId, accountCfg);

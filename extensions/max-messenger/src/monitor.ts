@@ -1,5 +1,14 @@
 import type { ChannelAccountSnapshot, OpenClawConfig, PluginRuntime } from "openclaw/plugin-sdk";
 import { MaxBotApi, type MaxBotInfo, type MaxUpdate } from "./api.js";
+import {
+  buildInboundLogRecord,
+  buildOutboundLogRecord,
+  buildUserRecord,
+  insertMaxInteractionLog,
+  resolveLoggerConfig,
+  upsertMaxUser,
+} from "./logging.js";
+import { resolveMaxAccount } from "./channel.js";
 import { getMaxRuntime } from "./runtime.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
@@ -95,6 +104,8 @@ async function handleUpdate(
       senderName,
       chatId: String(chatId),
       chatType: "direct",
+      rawUpdate: update,
+      senderUser: update.user,
       ...ctx,
     });
     return;
@@ -119,6 +130,8 @@ async function handleUpdate(
       senderName,
       chatId: String(chatId),
       chatType: "direct",
+      rawUpdate: update,
+      senderUser: update.callback.user,
       ...ctx,
     });
     return;
@@ -146,6 +159,8 @@ async function handleUpdate(
     senderName,
     chatId: String(chatId),
     chatType,
+    rawUpdate: update,
+    senderUser: message.sender,
     ...ctx,
   });
 }
@@ -160,8 +175,10 @@ async function dispatchToOpenClaw(params: {
   botInfo: MaxBotInfo;
   opts: MaxMonitorOptions;
   core: PluginRuntime;
+  rawUpdate?: MaxUpdate;
+  senderUser?: MaxUpdate["user"];
 }) {
-  const { text, senderId, senderName, chatId, chatType, api, opts, core } = params;
+  const { text, senderId, senderName, chatId, chatType, api, opts, core, rawUpdate, senderUser } = params;
   const config = opts.config;
   const peerId = chatType === "group" ? chatId : senderId;
   const maxCfg = (config.channels as Record<string, any> | undefined)?.max;
@@ -194,6 +211,8 @@ async function dispatchToOpenClaw(params: {
     sessionKey: route.sessionKey,
   });
   const envelope = core.channel.reply.resolveEnvelopeFormatOptions(config);
+  const account = resolveMaxAccount(config, opts.accountId);
+  const logger = resolveLoggerConfig(account);
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "MAX",
     from: chatType === "group" ? undefined : senderName,
@@ -234,6 +253,36 @@ async function dispatchToOpenClaw(params: {
     OriginatingTo: `max:${chatId}`,
     CommandAuthorized: commandAuthorized,
   };
+
+  const userRecord = buildUserRecord({
+    user: senderUser,
+    chatId,
+  });
+  if (userRecord) {
+    try {
+      await upsertMaxUser(logger, userRecord);
+    } catch (error) {
+      console.error("[max] user upsert error:", error);
+    }
+  }
+
+  try {
+    await insertMaxInteractionLog(
+      logger,
+      buildInboundLogRecord({
+        user: senderUser,
+        chatId,
+        text,
+        eventType: rawUpdate?.update_type || "message_created",
+        sessionId: route.sessionKey,
+        accountId: opts.accountId,
+        agentId: route.agentId,
+        rawPayload: rawUpdate || { text, senderId, chatId, chatType },
+      })
+    );
+  } catch (error) {
+    console.error("[max] inbound log error:", error);
+  }
 
   let streamMid: string | null = null;
   let streamAccum = "";
@@ -280,6 +329,28 @@ async function dispatchToOpenClaw(params: {
             if (mid) {
               streamMid = mid;
               streamAccum = replyText;
+            }
+
+            try {
+              await insertMaxInteractionLog(
+                logger,
+                buildOutboundLogRecord({
+                  user: senderUser,
+                  chatId,
+                  text: replyText,
+                  eventType: "message",
+                  sessionId: route.sessionKey,
+                  accountId: opts.accountId,
+                  agentId: route.agentId,
+                  rawPayload: {
+                    messageId: mid || null,
+                    payload,
+                    mode: "send",
+                  },
+                })
+              );
+            } catch (error) {
+              console.error("[max] outbound log error:", error);
             }
           }
 
