@@ -96,29 +96,6 @@ function parseOperatorAdminIntent(text: string): AdminIntent | null {
   const userId = idMatch ? Number(idMatch[0]) : null;
 
   const hasAny = (parts: string[]) => parts.some((part) => lowered.includes(part));
-  const asksAboutOperatorAccess =
-    hasAny([
-      "список доступ",
-      "покажи список",
-      "показать список",
-      "кому разреш",
-      "кто может писать",
-      "кто может писать оператору",
-      "кто может писать боту",
-      "кто в списке",
-      "кто есть в списке",
-      "доступ к боту оператора",
-      "доступ к оператору",
-      "allowlist",
-      "allowed users",
-    ]) ||
-    (hasAny(["список", "покажи", "показать", "кому", "кто"]) &&
-      hasAny(["доступ", "оператор", "бот"]));
-
-  if (asksAboutOperatorAccess) {
-    return { action: "list" };
-  }
-
   if (
     userId &&
     hasAny(["добав", "разреш", "открой", "дай доступ", "предостав", "внеси", "включи"])
@@ -131,6 +108,32 @@ function parseOperatorAdminIntent(text: string): AdminIntent | null {
     hasAny(["удал", "убер", "запрет", "закрой доступ", "исключ", "сними доступ", "выключи"])
   ) {
     return { action: "remove", userId };
+  }
+
+  const asksAboutOperatorAccess =
+    hasAny([
+      "список доступ",
+      "покажи список",
+      "показать список",
+      "у кого есть доступ",
+      "кому разреш",
+      "кому доступ",
+      "кто допущен",
+      "кто может писать",
+      "кто может писать оператору",
+      "кто может писать боту",
+      "кто в списке",
+      "кто есть в списке",
+      "доступ к боту оператора",
+      "доступ к оператору",
+      "allowlist",
+      "allowed users",
+    ]) ||
+    (hasAny(["список", "покажи", "показать", "кому", "кто", "у кого"]) &&
+      hasAny(["доступ", "оператор", "бот"]));
+
+  if (!userId && asksAboutOperatorAccess) {
+    return { action: "list" };
   }
 
   return null;
