@@ -31,6 +31,23 @@ function inferFilename(url: string, fallbackExt = "ogg"): string {
   return `max-voice.${fallbackExt}`;
 }
 
+function inferAudioFormat(contentType?: string | null): { mimeType: string; extension: string } {
+  const normalized = trimString(contentType)?.toLowerCase() || "";
+  if (normalized.includes("audio/mpeg") || normalized.includes("audio/mp3")) {
+    return { mimeType: "audio/mpeg", extension: "mp3" };
+  }
+  if (normalized.includes("audio/ogg")) {
+    return { mimeType: "audio/ogg", extension: "ogg" };
+  }
+  if (normalized.includes("audio/webm")) {
+    return { mimeType: "audio/webm", extension: "webm" };
+  }
+  if (normalized.includes("audio/wav") || normalized.includes("audio/x-wav")) {
+    return { mimeType: "audio/wav", extension: "wav" };
+  }
+  return { mimeType: normalized || "application/octet-stream", extension: "bin" };
+}
+
 export function resolveTranscriptionConfig(accountConfig: Record<string, unknown> | undefined): TranscriptionConfig {
   const enabledOverride = accountConfig?.transcriptionEnabled;
   const apiKey =
@@ -78,8 +95,11 @@ export async function transcribeMaxAudioAttachment(
   }
 
   const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-  const filename = inferFilename(audioUrl);
-  const mimeType = trimString(audioAttachment?.payload?.mime_type) || "audio/ogg";
+  const detected = inferAudioFormat(
+    trimString(audioAttachment?.payload?.mime_type) || audioResponse.headers.get("content-type")
+  );
+  const filename = inferFilename(audioUrl, detected.extension);
+  const mimeType = detected.mimeType;
 
   const form = new FormData();
   form.append("file", new Blob([audioBuffer], { type: mimeType }), filename);
