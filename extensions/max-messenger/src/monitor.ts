@@ -352,8 +352,26 @@ async function getRadarMenuImageToken(api: MaxBotApi): Promise<string | null> {
     promise = api
       .uploadImageFromFile(cacheKey)
       .then((payload) => {
-        const token = typeof payload?.token === "string" ? payload.token.trim() : "";
-        return token || null;
+        const topLevelToken = typeof payload?.token === "string" ? payload.token.trim() : "";
+        if (topLevelToken) {
+          return topLevelToken;
+        }
+
+        const photos =
+          payload && typeof payload === "object" && payload.photos && typeof payload.photos === "object"
+            ? Object.values(payload.photos as Record<string, unknown>)
+            : [];
+        for (const photo of photos) {
+          if (photo && typeof photo === "object") {
+            const nestedToken = typeof (photo as Record<string, unknown>).token === "string"
+              ? ((photo as Record<string, unknown>).token as string).trim()
+              : "";
+            if (nestedToken) {
+              return nestedToken;
+            }
+          }
+        }
+        return null;
       })
       .catch((error) => {
         console.error("[max] radar menu image upload error:", error);
