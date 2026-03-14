@@ -18,12 +18,10 @@ import { resolveMaxAccount } from "./channel.js";
 import {
   buildPublicMainMenuAttachments,
   evaluatePublicSafety,
-  isLifeSituationsLeafNode,
   sanitizePublicOutbound,
 } from "./public-safety.js";
 import { getMaxRuntime } from "./runtime.js";
 import { resolveTranscriptionConfig, transcribeMaxAudioAttachment } from "./transcription.js";
-import { buildLifeSituationKnowledgeReply } from "./knowledge.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
@@ -696,11 +694,7 @@ async function dispatchToOpenClaw(params: {
 
   if (isPublicResidentBot) {
     const publicDecision = evaluatePublicSafety(text);
-    let publicReply = publicDecision.reply;
-    if (publicDecision.intent === "life_situations" && isLifeSituationsLeafNode(publicDecision.nodeId)) {
-      publicReply = await buildLifeSituationKnowledgeReply(publicDecision.nodeId!, publicReply);
-    }
-    const safeReply = sanitizePublicOutbound(publicReply);
+    const safeReply = sanitizePublicOutbound(publicDecision.reply);
     const sessionId = `public:${chatScopeKey}`;
     const attachments =
       publicDecision.attachments ??
