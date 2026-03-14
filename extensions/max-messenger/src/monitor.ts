@@ -104,6 +104,12 @@ export async function monitorMaxProvider(opts: MaxMonitorOptions) {
         marker = response.marker;
       }
 
+      if ((response.updates || []).length > 0) {
+        console.log(
+          `[max] [${opts.accountId}] polled ${(response.updates || []).length} update(s), marker=${String(marker)}`
+        );
+      }
+
       for (const update of response.updates || []) {
         const key = deriveUpdateConcurrencyKey(update, opts.accountId);
         const previous = inFlightByKey.get(key) ?? Promise.resolve();
@@ -391,6 +397,10 @@ async function handleUpdate(
     core: PluginRuntime;
   }
 ) {
+  console.log(
+    `[max] [${ctx.opts.accountId}] update type=${update.update_type} ts=${String(update.timestamp ?? "")}`
+  );
+
   if (update.update_type === "bot_started") {
     const userId = update.user?.user_id;
     const chatId = update.chat_id;
@@ -416,6 +426,11 @@ async function handleUpdate(
   }
 
   if (update.update_type === "message_callback" && update.callback?.payload) {
+    console.log(
+      `[max] [${ctx.opts.accountId}] callback payloadType=${typeof update.callback.payload} chatId=${String(
+        update.callback.message?.recipient?.chat_id ?? ""
+      )} userId=${String(update.callback.user?.user_id ?? "")} payload=${JSON.stringify(update.callback.payload)}`
+    );
     const userId = update.callback.user?.user_id;
     const chatId = update.callback.message?.recipient?.chat_id;
     const senderName =
@@ -425,6 +440,11 @@ async function handleUpdate(
       String(userId);
 
     if (!userId || !chatId) {
+      console.log(
+        `[max] [${ctx.opts.accountId}] callback ignored: missing senderId/chatId senderId=${String(
+          userId ?? ""
+        )} chatId=${String(chatId ?? "")}`
+      );
       return;
     }
 
