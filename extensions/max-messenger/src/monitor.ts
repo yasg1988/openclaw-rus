@@ -4,6 +4,7 @@ import {
   buildInboundLogRecord,
   buildOutboundLogRecord,
   buildUserRecord,
+  isMaxUserAllowed,
   insertMaxInteractionLog,
   resolveLoggerConfig,
   upsertMaxUser,
@@ -181,9 +182,72 @@ async function dispatchToOpenClaw(params: {
   const { text, senderId, senderName, chatId, chatType, api, opts, core, rawUpdate, senderUser } = params;
   const config = opts.config;
   const peerId = chatType === "group" ? chatId : senderId;
-  const maxCfg = (config.channels as Record<string, any> | undefined)?.max;
-  const allowFrom = (maxCfg?.allowFrom ?? []).map(String);
-  const dmPolicy = String(maxCfg?.dmPolicy || "pairing");
+  const account = resolveMaxAccount(config, opts.accountId);
+  const logger = resolveLoggerConfig(account);
+  const allowFrom = (account.config.allowFrom ?? []).map(String);
+  const dmPolicy = String(account.config.dmPolicy || "pairing");
+  const directUserAllowlistTable = String(account.config.directUserAllowlistTable || "").trim();
+
+  if (chatType === "direct" && directUserAllowlistTable) {
+    try {
+      const isAllowed = await isMaxUserAllowed(logger, directUserAllowlistTable, senderId);
+      if (!isAllowed) {
+        const denialText = "⛔ Доступ к этому боту ограничен. Обратитесь к администратору.";
+        await api.sendMessage({
+          chatId: Number(chatId),
+          text: denialText,
+        });
+
+        try {
+          await insertMaxInteractionLog(
+            logger,
+            buildInboundLogRecord({
+              user: senderUser,
+              chatId,
+              text,
+              eventType: `${rawUpdate?.update_type || "message_created"}:denied`,
+              sessionId: undefined,
+              accountId: opts.accountId,
+              agentId: "unauthorized",
+              rawPayload: rawUpdate || { text, senderId, chatId, chatType },
+            })
+          );
+        } catch (error) {
+          console.error("[max] inbound log error:", error);
+        }
+
+        try {
+          await insertMaxInteractionLog(
+            logger,
+            buildOutboundLogRecord({
+              user: senderUser,
+              chatId,
+              text: denialText,
+              eventType: "access_denied",
+              sessionId: undefined,
+              accountId: opts.accountId,
+              agentId: "unauthorized",
+              rawPayload: {
+                reason: "user_not_in_allowlist",
+                userId: senderId,
+                table: directUserAllowlistTable,
+              },
+            })
+          );
+        } catch (error) {
+          console.error("[max] outbound log error:", error);
+        }
+        return;
+      }
+    } catch (error) {
+      console.error("[max] allowlist check error:", error);
+      await api.sendMessage({
+        chatId: Number(chatId),
+        text: "⚠️ Не удалось проверить доступ. Попробуйте позже.",
+      });
+      return;
+    }
+  }
 
   if (chatType === "direct" && dmPolicy !== "open" && allowFrom.length > 0 && !allowFrom.includes(senderId)) {
     await api.sendMessage({
@@ -211,8 +275,6 @@ async function dispatchToOpenClaw(params: {
     sessionKey: route.sessionKey,
   });
   const envelope = core.channel.reply.resolveEnvelopeFormatOptions(config);
-  const account = resolveMaxAccount(config, opts.accountId);
-  const logger = resolveLoggerConfig(account);
   const body = core.channel.reply.formatAgentEnvelope({
     channel: "MAX",
     from: chatType === "group" ? undefined : senderName,

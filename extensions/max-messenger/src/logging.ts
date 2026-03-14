@@ -7,6 +7,8 @@ type LoggerConfig = {
   schema: string;
 };
 
+type ReadProfileHeader = "Accept-Profile" | "Content-Profile";
+
 type UserRecord = {
   user_id: number;
   chat_id: number;
@@ -77,6 +79,28 @@ async function postgrestWrite(
   }
 }
 
+async function postgrestRead<T = unknown>(
+  logger: LoggerConfig,
+  tableQuery: string,
+  profileHeader: ReadProfileHeader = "Accept-Profile"
+): Promise<T> {
+  const res = await fetch(`${logger.supabaseUrl}/rest/v1/${tableQuery}`, {
+    method: "GET",
+    headers: {
+      apikey: logger.serviceRoleKey,
+      Authorization: `Bearer ${logger.serviceRoleKey}`,
+      [profileHeader]: logger.schema,
+    },
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => "");
+    throw new Error(`PostgREST read failed (${tableQuery}): ${res.status} ${res.statusText} ${errorText}`);
+  }
+
+  return (await res.json()) as T;
+}
+
 export async function upsertMaxUser(
   logger: LoggerConfig | null,
   user: UserRecord
@@ -102,6 +126,29 @@ export async function insertMaxInteractionLog(
   }
 
   await postgrestWrite(logger, "interaction_logs", [row], "return=minimal");
+}
+
+export async function isMaxUserAllowed(
+  logger: LoggerConfig | null,
+  table: string | null | undefined,
+  userId: string | number
+): Promise<boolean> {
+  if (!logger) {
+    return true;
+  }
+
+  const tableName = trimString(table);
+  const numericUserId = Number(userId);
+  if (!tableName || !Number.isFinite(numericUserId)) {
+    return true;
+  }
+
+  const rows = await postgrestRead<Array<{ user_id?: number }>>(
+    logger,
+    `${tableName}?select=user_id&user_id=eq.${numericUserId}&limit=1`
+  );
+
+  return rows.length > 0;
 }
 
 export function buildUserRecord(params: {

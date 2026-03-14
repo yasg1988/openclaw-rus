@@ -19,6 +19,7 @@ export interface MaxChannelConfig {
   supabaseUrl?: string;
   supabaseServiceKey?: string;
   logSchema?: string;
+  directUserAllowlistTable?: string;
   allowFrom?: Array<string | number>;
   dmPolicy?: string;
   defaultTo?: string;
@@ -70,7 +71,10 @@ function readMaxAccountConfig(cfg: OpenClawConfig, accountId?: string | null): M
   const resolvedAccountId = String(accountId || resolveDefaultMaxAccountId(cfg)).trim() || DEFAULT_ACCOUNT_ID;
   const { accounts, defaultAccountId, ...base } = channelCfg;
   if (resolvedAccountId === DEFAULT_ACCOUNT_ID) {
-    return base;
+    return {
+      ...base,
+      ...(accounts?.[DEFAULT_ACCOUNT_ID] || {}),
+    };
   }
   const scoped = accounts?.[resolvedAccountId] || {};
   return {
