@@ -15,6 +15,7 @@ import {
 } from "./logging.js";
 import { resolveMaxAccount } from "./channel.js";
 import { getMaxRuntime } from "./runtime.js";
+import { resolveTranscriptionConfig, transcribeMaxAudioAttachment } from "./transcription.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
@@ -280,12 +281,37 @@ async function handleUpdate(
   const message = update.message;
   const senderId = message.sender?.user_id;
   const chatId = message.recipient?.chat_id;
-  const text = message.body?.text || "";
+  const attachments = (message.body?.attachments as unknown[]) || [];
+  let text = message.body?.text || "";
   const senderName =
     message.sender?.first_name || message.sender?.name || message.sender?.username || String(senderId);
   const chatType = message.recipient?.chat_type === "dialog" ? "direct" : "group";
 
-  if (!senderId || !chatId || senderId === ctx.botInfo.user_id || !text.trim()) {
+  if (!senderId || !chatId || senderId === ctx.botInfo.user_id) {
+    return;
+  }
+
+  if (attachments.length) {
+    const account = resolveMaxAccount(ctx.opts.config, ctx.opts.accountId);
+    const transcriptionConfig = resolveTranscriptionConfig(account.config as Record<string, unknown>);
+    try {
+      const transcript = await transcribeMaxAudioAttachment(attachments, transcriptionConfig);
+      if (transcript) {
+        text = text.trim()
+          ? `${text.trim()}\n\n[Голосовое сообщение]: ${transcript}`
+          : `[Голосовое сообщение]: ${transcript}`;
+      } else if (!text.trim()) {
+        text = "[Голосовое сообщение]";
+      }
+    } catch (error) {
+      console.error("[max] transcription error:", error);
+      if (!text.trim()) {
+        text = "[Голосовое сообщение — не удалось расшифровать]";
+      }
+    }
+  }
+
+  if (!text.trim()) {
     return;
   }
 

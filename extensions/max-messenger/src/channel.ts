@@ -21,6 +21,10 @@ export interface MaxChannelConfig {
   logSchema?: string;
   directUserAllowlistTable?: string;
   adminChatTable?: string;
+  transcriptionEnabled?: boolean;
+  transcriptionModel?: string;
+  transcriptionLanguage?: string;
+  transcriptionPrompt?: string;
   allowFrom?: Array<string | number>;
   dmPolicy?: string;
   defaultTo?: string;
