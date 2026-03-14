@@ -62,6 +62,11 @@ export interface MaxSendResult {
   };
 }
 
+export interface MaxAnswerCallbackResult {
+  success?: boolean;
+  message?: string;
+}
+
 interface MaxUploadUrlResponse {
   url: string;
   token?: string;
@@ -238,6 +243,26 @@ export class MaxBotApi {
     if (opts.format) body.format = opts.format;
 
     return this.put<{ success: boolean; message?: string }>("/messages", params, body);
+  }
+
+  async answerOnCallback(opts: {
+    callbackId: string;
+    message?: {
+      text?: string;
+      attachments?: unknown[] | null;
+      link?: unknown;
+      notify?: boolean;
+      format?: string;
+    } | null;
+    notification?: string | null;
+  }): Promise<MaxAnswerCallbackResult> {
+    const params: Record<string, string | number | null | undefined> = {
+      callback_id: opts.callbackId,
+    };
+    const body: Record<string, unknown> = {};
+    if (opts.message !== undefined) body.message = opts.message;
+    if (opts.notification !== undefined) body.notification = opts.notification;
+    return this.post<MaxAnswerCallbackResult>("/answers", params, body);
   }
 
   async sendAction(chatId: number, action = "typing_on"): Promise<unknown> {

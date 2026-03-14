@@ -351,6 +351,27 @@ async function sendStaticReply(params: {
   }
 }
 
+async function answerMaxCallback(params: {
+  api: MaxBotApi;
+  callbackId: string;
+  text: string;
+  attachments?: unknown[];
+}) {
+  const replyText = sanitizeOutboundText(params.text);
+  if (!replyText.trim()) {
+    return;
+  }
+
+  await params.api.answerOnCallback({
+    callbackId: params.callbackId,
+    message: {
+      text: replyText,
+      attachments: params.attachments,
+      format: "markdown",
+    },
+  });
+}
+
 async function getRadarMenuImageToken(api: MaxBotApi): Promise<string | null> {
   const cacheKey = RADAR_MENU_LOGO_PATH;
   let promise = publicMenuImageByPath.get(cacheKey);
@@ -759,30 +780,68 @@ async function dispatchToOpenClaw(params: {
     } catch (error) {
       console.error("[max] inbound log error:", error);
     }
+    const callbackId =
+      rawUpdate?.update_type === "message_callback" ? rawUpdate.callback?.callback_id || null : null;
 
-    await sendStaticReply({
-      api,
-      logger,
-      chatId,
-      text: safeReply,
-      attachments,
-      eventType: publicDecision.eventType,
-      accountId: opts.accountId,
-      agentId: "public_guard",
-      chatType,
-      chatScopeKey,
-      senderUser,
-      sessionId,
-      chatTag: registeredChat?.chat_tag || null,
-      chatName: registeredChat?.chat_name || null,
-      isAdminChat: registeredChat?.is_admin ?? null,
-      rawPayload: {
-        policy: {
-          intent: publicDecision.intent,
-          reasonCode: publicDecision.reasonCode,
+    if (callbackId) {
+      await answerMaxCallback({
+        api,
+        callbackId,
+        text: safeReply,
+        attachments,
+      });
+
+      try {
+        await logMaxOutbound(logger, {
+          user: senderUser,
+          chatId,
+          text: safeReply,
+          eventType: publicDecision.eventType,
+          sessionId,
+          accountId: opts.accountId,
+          agentId: "public_guard",
+          chatType,
+          chatScopeKey,
+          chatTag: registeredChat?.chat_tag || null,
+          chatName: registeredChat?.chat_name || null,
+          isAdminChat: registeredChat?.is_admin ?? null,
+          rawPayload: {
+            policy: {
+              intent: publicDecision.intent,
+              reasonCode: publicDecision.reasonCode,
+            },
+            callbackId,
+            mode: "answer_on_callback",
+          },
+        });
+      } catch (error) {
+        console.error("[max] outbound log error:", error);
+      }
+    } else {
+      await sendStaticReply({
+        api,
+        logger,
+        chatId,
+        text: safeReply,
+        attachments,
+        eventType: publicDecision.eventType,
+        accountId: opts.accountId,
+        agentId: "public_guard",
+        chatType,
+        chatScopeKey,
+        senderUser,
+        sessionId,
+        chatTag: registeredChat?.chat_tag || null,
+        chatName: registeredChat?.chat_name || null,
+        isAdminChat: registeredChat?.is_admin ?? null,
+        rawPayload: {
+          policy: {
+            intent: publicDecision.intent,
+            reasonCode: publicDecision.reasonCode,
+          },
         },
-      },
-    });
+      });
+    }
 
     opts.setStatus({
       ...opts.getStatus(),
