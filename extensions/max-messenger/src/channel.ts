@@ -12,12 +12,15 @@ import { getMaxRuntime } from "./runtime.js";
 const DEFAULT_ACCOUNT_ID = "default";
 
 export interface MaxChannelConfig {
+  name?: string;
   enabled?: boolean;
   botToken?: string;
   apiBaseUrl?: string;
   allowFrom?: Array<string | number>;
   dmPolicy?: string;
   defaultTo?: string;
+  accounts?: Record<string, MaxChannelConfig>;
+  defaultAccountId?: string;
 }
 
 export interface ResolvedMaxAccount {
@@ -44,18 +47,66 @@ function readMaxChannelConfig(cfg: OpenClawConfig): MaxChannelConfig {
   return (channels?.max as MaxChannelConfig | undefined) || {};
 }
 
-function resolveMaxAccount(cfg: OpenClawConfig, accountId?: string | null): ResolvedMaxAccount {
+function listMaxAccountIds(cfg: OpenClawConfig): string[] {
   const channelCfg = readMaxChannelConfig(cfg);
-  const token = String(channelCfg.botToken || process.env.MAX_BOT_TOKEN || "").trim();
+  const accountKeys = Object.keys(channelCfg.accounts || {}).filter(Boolean);
+  return Array.from(new Set([DEFAULT_ACCOUNT_ID, ...accountKeys]));
+}
+
+function resolveDefaultMaxAccountId(cfg: OpenClawConfig): string {
+  const channelCfg = readMaxChannelConfig(cfg);
+  const preferred = String(channelCfg.defaultAccountId || "").trim();
+  if (preferred && listMaxAccountIds(cfg).includes(preferred)) {
+    return preferred;
+  }
+  return DEFAULT_ACCOUNT_ID;
+}
+
+function readMaxAccountConfig(cfg: OpenClawConfig, accountId?: string | null): MaxChannelConfig {
+  const channelCfg = readMaxChannelConfig(cfg);
+  const resolvedAccountId = String(accountId || resolveDefaultMaxAccountId(cfg)).trim() || DEFAULT_ACCOUNT_ID;
+  const { accounts, defaultAccountId, ...base } = channelCfg;
+  if (resolvedAccountId === DEFAULT_ACCOUNT_ID) {
+    return base;
+  }
+  const scoped = accounts?.[resolvedAccountId] || {};
+  return {
+    ...base,
+    ...scoped,
+  };
+}
+
+function resolveAccountToken(accountId: string, accountCfg: MaxChannelConfig): { token: string; tokenSource: string } {
+  const normalizedAccountId = accountId.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase();
+  const envTokenName = accountId === DEFAULT_ACCOUNT_ID ? "MAX_BOT_TOKEN" : `MAX_BOT_TOKEN_${normalizedAccountId}`;
+  const envToken = String(process.env[envTokenName] || "").trim();
+  const defaultEnvToken = accountId === DEFAULT_ACCOUNT_ID ? "" : String(process.env.MAX_BOT_TOKEN || "").trim();
+  const configToken = String(accountCfg.botToken || "").trim();
+  const token = configToken || envToken || defaultEnvToken || "";
+  const tokenSource = configToken
+    ? "config"
+    : envToken
+      ? `env:${envTokenName}`
+      : defaultEnvToken
+        ? "env:MAX_BOT_TOKEN"
+        : "none";
+  return { token, tokenSource };
+}
+
+function resolveMaxAccount(cfg: OpenClawConfig, accountId?: string | null): ResolvedMaxAccount {
+  const resolvedAccountId = String(accountId || resolveDefaultMaxAccountId(cfg)).trim() || DEFAULT_ACCOUNT_ID;
+  const accountCfg = readMaxAccountConfig(cfg, resolvedAccountId);
+  const { token, tokenSource } = resolveAccountToken(resolvedAccountId, accountCfg);
 
   return {
-    accountId: accountId || DEFAULT_ACCOUNT_ID,
-    enabled: channelCfg.enabled !== false,
+    accountId: resolvedAccountId,
+    name: accountCfg.name,
+    enabled: accountCfg.enabled !== false,
     configured: Boolean(token),
     token,
-    tokenSource: channelCfg.botToken ? "config" : process.env.MAX_BOT_TOKEN ? "env" : "none",
-    baseUrl: String(channelCfg.apiBaseUrl || "https://platform-api.max.ru"),
-    config: channelCfg,
+    tokenSource,
+    baseUrl: String(accountCfg.apiBaseUrl || "https://platform-api.max.ru"),
+    config: accountCfg,
   };
 }
 
@@ -89,15 +140,15 @@ export const maxPlugin: ChannelPlugin<ResolvedMaxAccount, MaxProbe> = {
   },
   reload: { configPrefixes: ["channels.max"] },
   config: {
-    listAccountIds: () => [DEFAULT_ACCOUNT_ID],
+    listAccountIds: (cfg) => listMaxAccountIds(cfg),
     resolveAccount: (cfg, accountId) => resolveMaxAccount(cfg, accountId),
-    defaultAccountId: () => DEFAULT_ACCOUNT_ID,
+    defaultAccountId: (cfg) => resolveDefaultMaxAccountId(cfg),
     isEnabled: (account) => account.enabled,
     isConfigured: (account) => account.configured,
     describeAccount: (account) => describeAccount(account),
-    resolveAllowFrom: ({ cfg }) => readMaxChannelConfig(cfg).allowFrom,
+    resolveAllowFrom: ({ cfg, accountId }) => readMaxAccountConfig(cfg, accountId).allowFrom,
     formatAllowFrom: ({ allowFrom }) => allowFrom.map((entry) => String(entry).trim()).filter(Boolean),
-    resolveDefaultTo: ({ cfg }) => readMaxChannelConfig(cfg).defaultTo,
+    resolveDefaultTo: ({ cfg, accountId }) => readMaxAccountConfig(cfg, accountId).defaultTo,
   },
   pairing: {
     idLabel: "maxUserId",
@@ -118,11 +169,17 @@ export const maxPlugin: ChannelPlugin<ResolvedMaxAccount, MaxProbe> = {
     },
   },
   security: {
-    resolveDmPolicy: ({ account }) => ({
+    resolveDmPolicy: ({ account, accountId }) => ({
       policy: account.config.dmPolicy || "pairing",
       allowFrom: account.config.allowFrom ?? [],
-      policyPath: "channels.max.dmPolicy",
-      allowFromPath: "channels.max.allowFrom",
+      policyPath:
+        accountId && accountId !== DEFAULT_ACCOUNT_ID
+          ? `channels.max.accounts.${accountId}.dmPolicy`
+          : "channels.max.dmPolicy",
+      allowFromPath:
+        accountId && accountId !== DEFAULT_ACCOUNT_ID
+          ? `channels.max.accounts.${accountId}.allowFrom`
+          : "channels.max.allowFrom",
       approveHint: "Use: /allow max <userId>",
       normalizeEntry: (raw) => raw.replace(/^max:/i, "").trim(),
     }),
