@@ -23,103 +23,103 @@ type CacheEntry = {
 const DOKUMENT_CACHE_TTL_MS = 5 * 60_000;
 const dokumentCache = new Map<string, CacheEntry>();
 
-const SECTION_HEADINGS = {
-  terms: "I. Сфера правового регулирования и организация выполнения",
-  generalClean: "II. Общие требования к состоянию территорий общего",
-  cleaning: "III. Порядок уборки городских территорий, включая перечень",
-  roads: "IV. Содержание дорог и тротуаров, внутриквартальных",
-  stormwater: "V. Отведение ливневых и талых вод",
-  parking: "VI. Содержание стоянок длительного и краткосрочного хранения",
-  fences: "VII. Установка ограждений на придомовых территориях",
-  smallForms: "VIII. Содержание малых архитектурных форм,",
-  recreation: "IX. Содержание зон отдыха",
-  greenery: "X. Содержание зеленых насаждений",
-  buildings: "XI. Содержание зданий, строений и сооружений",
-  landPlots: "XII. Содержание земельных участков",
-  apartmentYards: "XIII. Содержание придомовой территории многоквартирных домов",
-  construction: "XIV. Содержание строительных площадок",
-  signposts: "XV. Установка и содержание информационных указателей",
-  waste: "XVI. Организация деятельности по сбору (в том числе",
-  cemetery: "XVII. Содержание мест погребения",
-  toilets: "XVIII. Содержание общественных туалетов.",
-  visual: "XIX. Требования к состоянию, содержанию объектов (средств)",
-  owners: "XX. Ответственные лица за содержание и уборку территорий",
-  earthworks: "XXI. Производство земляных работ по прокладке",
-  ads: "XXII. Средства размещения наружной рекламы и информации",
-  holiday: "XXIII. Праздничное оформление территории города",
-  civicParticipation: "XIV. Порядок участия граждан в благоустройстве",
-  accessibility: "XXV. Особые требования к доступной среде",
-  civicForms: "XXVI. Формы участия субъектов городской среды",
-  stalls: "XXVII. Нестационарные объекты",
-  control: "XXVIII. Контроль за соблюдением Правил",
+const SECTION_CODES = {
+  terms: "I.",
+  generalClean: "II.",
+  cleaning: "III.",
+  roads: "IV.",
+  stormwater: "V.",
+  parking: "VI.",
+  fences: "VII.",
+  smallForms: "VIII.",
+  recreation: "IX.",
+  greenery: "X.",
+  buildings: "XI.",
+  landPlots: "XII.",
+  apartmentYards: "XIII.",
+  construction: "XIV.",
+  signposts: "XV.",
+  waste: "XVI.",
+  cemetery: "XVII.",
+  toilets: "XVIII.",
+  visual: "XIX.",
+  owners: "XX.",
+  earthworks: "XXI.",
+  ads: "XXII.",
+  holiday: "XXIII.",
+  civicParticipation: "XXIV.",
+  accessibility: "XXV.",
+  civicForms: "XXVI.",
+  stalls: "XXVII.",
+  control: "XXVIII.",
 } as const;
 
 const LIFE_SITUATION_SOURCES: Record<string, string[]> = {
-  "ls:home-yard-care": [SECTION_HEADINGS.apartmentYards],
-  "ls:home-yard-fence": [SECTION_HEADINGS.fences],
-  "ls:home-yard-playgrounds": [SECTION_HEADINGS.smallForms, SECTION_HEADINGS.apartmentYards],
-  "ls:home-yard-access": [SECTION_HEADINGS.accessibility],
-  "ls:home-yard-owner": [SECTION_HEADINGS.owners],
-  "ls:home-plot-care": [SECTION_HEADINGS.landPlots],
-  "ls:home-plot-fence": [SECTION_HEADINGS.fences, SECTION_HEADINGS.landPlots],
-  "ls:home-plot-green": [SECTION_HEADINGS.greenery, SECTION_HEADINGS.landPlots],
-  "ls:home-plot-ban": [SECTION_HEADINGS.landPlots],
-  "ls:home-building-facade": [SECTION_HEADINGS.buildings],
-  "ls:home-building-light": [SECTION_HEADINGS.buildings],
-  "ls:home-building-signs": [SECTION_HEADINGS.ads, SECTION_HEADINGS.visual],
-  "ls:home-construction-safety": [SECTION_HEADINGS.construction],
-  "ls:home-construction-clean": [SECTION_HEADINGS.construction],
-  "ls:home-construction-restore": [SECTION_HEADINGS.construction, SECTION_HEADINGS.earthworks],
-  "ls:roads-cleaning-summer": [SECTION_HEADINGS.cleaning],
-  "ls:roads-cleaning-winter": [SECTION_HEADINGS.cleaning],
-  "ls:roads-cleaning-ice": [SECTION_HEADINGS.cleaning],
-  "ls:roads-surface-pits": [SECTION_HEADINGS.roads],
-  "ls:roads-surface-yards": [SECTION_HEADINGS.roads],
-  "ls:roads-surface-bridges": [SECTION_HEADINGS.roads],
-  "ls:roads-water-clog": [SECTION_HEADINGS.stormwater],
-  "ls:roads-water-flood": [SECTION_HEADINGS.stormwater],
-  "ls:roads-water-owner": [SECTION_HEADINGS.stormwater, SECTION_HEADINGS.owners],
-  "ls:roads-parking-care": [SECTION_HEADINGS.parking],
-  "ls:roads-parking-snow": [SECTION_HEADINGS.parking, SECTION_HEADINGS.cleaning],
-  "ls:roads-parking-owner": [SECTION_HEADINGS.parking, SECTION_HEADINGS.owners],
-  "ls:roads-earthworks-permit": [SECTION_HEADINGS.earthworks],
-  "ls:roads-earthworks-fence": [SECTION_HEADINGS.earthworks],
-  "ls:roads-earthworks-restore": [SECTION_HEADINGS.earthworks],
-  "ls:comfort-green-care": [SECTION_HEADINGS.greenery],
-  "ls:comfort-green-cut": [SECTION_HEADINGS.greenery],
-  "ls:comfort-green-damage": [SECTION_HEADINGS.greenery],
-  "ls:comfort-parks-care": [SECTION_HEADINGS.recreation],
-  "ls:comfort-parks-water": [SECTION_HEADINGS.recreation],
-  "ls:comfort-parks-objects": [SECTION_HEADINGS.recreation, SECTION_HEADINGS.smallForms],
-  "ls:comfort-maf-benches": [SECTION_HEADINGS.smallForms],
-  "ls:comfort-maf-repair": [SECTION_HEADINGS.smallForms],
-  "ls:comfort-toilets": [SECTION_HEADINGS.toilets],
-  "ls:comfort-holidays": [SECTION_HEADINGS.holiday],
-  "ls:visual-clean-general": [SECTION_HEADINGS.generalClean],
-  "ls:visual-clean-snow": [SECTION_HEADINGS.cleaning],
-  "ls:visual-clean-containers": [SECTION_HEADINGS.waste],
-  "ls:visual-waste-remove": [SECTION_HEADINGS.waste],
-  "ls:visual-waste-oversized": [SECTION_HEADINGS.waste],
-  "ls:visual-waste-ban": [SECTION_HEADINGS.waste, SECTION_HEADINGS.generalClean],
-  "ls:visual-signposts": [SECTION_HEADINGS.signposts],
-  "ls:visual-signs-place": [SECTION_HEADINGS.ads],
-  "ls:visual-signs-rules": [SECTION_HEADINGS.visual, SECTION_HEADINGS.ads],
-  "ls:visual-signs-heritage": [SECTION_HEADINGS.visual, SECTION_HEADINGS.ads],
-  "ls:visual-graffiti": [SECTION_HEADINGS.visual],
-  "ls:visual-stalls-place": [SECTION_HEADINGS.stalls],
-  "ls:visual-stalls-ban": [SECTION_HEADINGS.stalls],
-  "ls:civic-participation-volunteer": [SECTION_HEADINGS.civicParticipation, SECTION_HEADINGS.civicForms],
-  "ls:civic-participation-forms": [SECTION_HEADINGS.civicParticipation, SECTION_HEADINGS.civicForms],
-  "ls:civic-participation-control": [SECTION_HEADINGS.civicParticipation, SECTION_HEADINGS.control],
-  "ls:civic-owner-roads": [SECTION_HEADINGS.owners, SECTION_HEADINGS.roads],
-  "ls:civic-owner-houses": [SECTION_HEADINGS.owners, SECTION_HEADINGS.apartmentYards],
-  "ls:civic-owner-utilities": [SECTION_HEADINGS.owners],
-  "ls:civic-control-who": [SECTION_HEADINGS.control],
-  "ls:civic-control-what": [SECTION_HEADINGS.control],
-  "ls:civic-special-cemetery": [SECTION_HEADINGS.cemetery],
-  "ls:civic-special-other": [SECTION_HEADINGS.cemetery],
-  "ls:civic-reference-terms": [SECTION_HEADINGS.terms],
-  "ls:civic-reference-apps": [SECTION_HEADINGS.terms, SECTION_HEADINGS.ads],
+  "ls:home-yard-care": [SECTION_CODES.apartmentYards],
+  "ls:home-yard-fence": [SECTION_CODES.fences],
+  "ls:home-yard-playgrounds": [SECTION_CODES.smallForms, SECTION_CODES.apartmentYards],
+  "ls:home-yard-access": [SECTION_CODES.accessibility],
+  "ls:home-yard-owner": [SECTION_CODES.owners],
+  "ls:home-plot-care": [SECTION_CODES.landPlots],
+  "ls:home-plot-fence": [SECTION_CODES.fences, SECTION_CODES.landPlots],
+  "ls:home-plot-green": [SECTION_CODES.greenery, SECTION_CODES.landPlots],
+  "ls:home-plot-ban": [SECTION_CODES.landPlots],
+  "ls:home-building-facade": [SECTION_CODES.buildings],
+  "ls:home-building-light": [SECTION_CODES.buildings],
+  "ls:home-building-signs": [SECTION_CODES.ads, SECTION_CODES.visual],
+  "ls:home-construction-safety": [SECTION_CODES.construction],
+  "ls:home-construction-clean": [SECTION_CODES.construction],
+  "ls:home-construction-restore": [SECTION_CODES.construction, SECTION_CODES.earthworks],
+  "ls:roads-cleaning-summer": [SECTION_CODES.cleaning],
+  "ls:roads-cleaning-winter": [SECTION_CODES.cleaning],
+  "ls:roads-cleaning-ice": [SECTION_CODES.cleaning],
+  "ls:roads-surface-pits": [SECTION_CODES.roads],
+  "ls:roads-surface-yards": [SECTION_CODES.roads],
+  "ls:roads-surface-bridges": [SECTION_CODES.roads],
+  "ls:roads-water-clog": [SECTION_CODES.stormwater],
+  "ls:roads-water-flood": [SECTION_CODES.stormwater],
+  "ls:roads-water-owner": [SECTION_CODES.stormwater, SECTION_CODES.owners],
+  "ls:roads-parking-care": [SECTION_CODES.parking],
+  "ls:roads-parking-snow": [SECTION_CODES.parking, SECTION_CODES.cleaning],
+  "ls:roads-parking-owner": [SECTION_CODES.parking, SECTION_CODES.owners],
+  "ls:roads-earthworks-permit": [SECTION_CODES.earthworks],
+  "ls:roads-earthworks-fence": [SECTION_CODES.earthworks],
+  "ls:roads-earthworks-restore": [SECTION_CODES.earthworks],
+  "ls:comfort-green-care": [SECTION_CODES.greenery],
+  "ls:comfort-green-cut": [SECTION_CODES.greenery],
+  "ls:comfort-green-damage": [SECTION_CODES.greenery],
+  "ls:comfort-parks-care": [SECTION_CODES.recreation],
+  "ls:comfort-parks-water": [SECTION_CODES.recreation],
+  "ls:comfort-parks-objects": [SECTION_CODES.recreation, SECTION_CODES.smallForms],
+  "ls:comfort-maf-benches": [SECTION_CODES.smallForms],
+  "ls:comfort-maf-repair": [SECTION_CODES.smallForms],
+  "ls:comfort-toilets": [SECTION_CODES.toilets],
+  "ls:comfort-holidays": [SECTION_CODES.holiday],
+  "ls:visual-clean-general": [SECTION_CODES.generalClean],
+  "ls:visual-clean-snow": [SECTION_CODES.cleaning],
+  "ls:visual-clean-containers": [SECTION_CODES.waste],
+  "ls:visual-waste-remove": [SECTION_CODES.waste],
+  "ls:visual-waste-oversized": [SECTION_CODES.waste],
+  "ls:visual-waste-ban": [SECTION_CODES.waste, SECTION_CODES.generalClean],
+  "ls:visual-signposts": [SECTION_CODES.signposts],
+  "ls:visual-signs-place": [SECTION_CODES.ads],
+  "ls:visual-signs-rules": [SECTION_CODES.visual, SECTION_CODES.ads],
+  "ls:visual-signs-heritage": [SECTION_CODES.visual, SECTION_CODES.ads],
+  "ls:visual-graffiti": [SECTION_CODES.visual],
+  "ls:visual-stalls-place": [SECTION_CODES.stalls],
+  "ls:visual-stalls-ban": [SECTION_CODES.stalls],
+  "ls:civic-participation-volunteer": [SECTION_CODES.civicParticipation, SECTION_CODES.civicForms],
+  "ls:civic-participation-forms": [SECTION_CODES.civicParticipation, SECTION_CODES.civicForms],
+  "ls:civic-participation-control": [SECTION_CODES.civicParticipation, SECTION_CODES.control],
+  "ls:civic-owner-roads": [SECTION_CODES.owners, SECTION_CODES.roads],
+  "ls:civic-owner-houses": [SECTION_CODES.owners, SECTION_CODES.apartmentYards],
+  "ls:civic-owner-utilities": [SECTION_CODES.owners],
+  "ls:civic-control-who": [SECTION_CODES.control],
+  "ls:civic-control-what": [SECTION_CODES.control],
+  "ls:civic-special-cemetery": [SECTION_CODES.cemetery],
+  "ls:civic-special-other": [SECTION_CODES.cemetery],
+  "ls:civic-reference-terms": [SECTION_CODES.terms],
+  "ls:civic-reference-apps": [SECTION_CODES.terms, SECTION_CODES.ads],
 };
 
 function trimString(value?: string | null): string | null {
@@ -189,12 +189,11 @@ async function loadRulesBlocks(slug = "pravila-blagoustroystva"): Promise<RuleBl
   return blocks;
 }
 
-function collectSectionBulletPoints(blocks: RuleBlock[], sectionHeadings: string[]): string[] {
-  const wanted = new Set(sectionHeadings);
+function collectSectionBulletPoints(blocks: RuleBlock[], sectionCodes: string[]): string[] {
   const result: string[] = [];
   for (const block of blocks) {
     const chapter = Array.isArray(block.section_path) ? trimString(block.section_path[0]) : null;
-    if (!chapter || !wanted.has(chapter)) {
+    if (!chapter || !sectionCodes.some((code) => chapter.startsWith(code))) {
       continue;
     }
 
@@ -223,8 +222,8 @@ export async function buildLifeSituationKnowledgeReply(
   nodeId: string,
   fallbackReply: string
 ): Promise<string> {
-  const sectionHeadings = LIFE_SITUATION_SOURCES[nodeId];
-  if (!sectionHeadings?.length) {
+  const sectionCodes = LIFE_SITUATION_SOURCES[nodeId];
+  if (!sectionCodes?.length) {
     return fallbackReply;
   }
 
@@ -234,13 +233,12 @@ export async function buildLifeSituationKnowledgeReply(
       return fallbackReply;
     }
 
-    const bullets = collectSectionBulletPoints(blocks, sectionHeadings);
+    const bullets = collectSectionBulletPoints(blocks, sectionCodes);
     if (!bullets.length) {
       return fallbackReply;
     }
 
-    const chapterLabels = sectionHeadings
-      .map((heading) => trimString(heading)?.split(/\s{2,}/)[0] || heading)
+    const chapterLabels = sectionCodes
       .slice(0, 2)
       .join(", ");
 
