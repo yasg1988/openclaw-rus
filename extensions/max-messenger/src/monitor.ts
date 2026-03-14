@@ -18,9 +18,6 @@ import { getMaxRuntime } from "./runtime.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
-const ADMIN_LIST_RE = /\b(список|покажи|показать|кто)\b/i;
-const ADMIN_ADD_RE = /\b(добав|разреш|открой|дай\s+доступ|предостав)\b/i;
-const ADMIN_REMOVE_RE = /\b(удал|убер|запрет|закрой\s+доступ|исключ|сними\s+доступ)\b/i;
 
 type AdminIntent =
   | { action: "list" }
@@ -97,19 +94,42 @@ function parseOperatorAdminIntent(text: string): AdminIntent | null {
   const lowered = normalized.toLowerCase();
   const idMatch = lowered.match(/(?<!\d)-?\d{5,}(?!\d)/);
   const userId = idMatch ? Number(idMatch[0]) : null;
-  const listLike =
-    ADMIN_LIST_RE.test(lowered) &&
-    /(доступ|списке|список|может\s+писать|пишет\s+боту|allowed|allowlist)/i.test(lowered);
 
-  if (listLike) {
+  const hasAny = (parts: string[]) => parts.some((part) => lowered.includes(part));
+  const asksAboutOperatorAccess =
+    hasAny([
+      "список доступ",
+      "покажи список",
+      "показать список",
+      "кому разреш",
+      "кто может писать",
+      "кто может писать оператору",
+      "кто может писать боту",
+      "кто в списке",
+      "кто есть в списке",
+      "доступ к боту оператора",
+      "доступ к оператору",
+      "allowlist",
+      "allowed users",
+    ]) ||
+    (hasAny(["список", "покажи", "показать", "кому", "кто"]) &&
+      hasAny(["доступ", "оператор", "бот"]));
+
+  if (asksAboutOperatorAccess) {
     return { action: "list" };
   }
 
-  if (userId && ADMIN_ADD_RE.test(lowered)) {
+  if (
+    userId &&
+    hasAny(["добав", "разреш", "открой", "дай доступ", "предостав", "внеси", "включи"])
+  ) {
     return { action: "add", userId };
   }
 
-  if (userId && ADMIN_REMOVE_RE.test(lowered)) {
+  if (
+    userId &&
+    hasAny(["удал", "убер", "запрет", "закрой доступ", "исключ", "сними доступ", "выключи"])
+  ) {
     return { action: "remove", userId };
   }
 
