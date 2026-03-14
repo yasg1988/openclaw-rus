@@ -131,7 +131,7 @@ function hasAll(text: string, parts: readonly string[]): boolean {
 }
 
 function isGreeting(text: string): boolean {
-  return hasAny(text, ["привет", "здравств", "добрый день", "добрый вечер", "доброе утро", "/start"]);
+  return hasAny(text, ["привет", "здравств", "добрый день", "добрый вечер", "доброе утро", "/start", "меню"]);
 }
 
 function isIdentityQuestion(text: string): boolean {
