@@ -7,7 +7,7 @@ const PUBLIC_INFO_OPTIONS = [
 
 export type PublicSafetyDecision =
   | {
-      kind: "reply";
+      kind: "reply" | "menu";
       intent:
         | "greeting"
         | "identity"
@@ -18,6 +18,9 @@ export type PublicSafetyDecision =
         | "chat_operator"
         | "my_requests"
         | "book_appointment"
+        | "life_situations"
+        | "management_company"
+        | "forbidden_signs"
         | "help"
         | "unknown"
         | "unsafe";
@@ -37,6 +40,9 @@ export type PublicSafetyDecision =
         | "chat_operator"
         | "my_requests_pending"
         | "book_appointment_pending"
+        | "life_situations_pending"
+        | "management_company_pending"
+        | "forbidden_signs_pending"
         | "help"
         | "unknown_request"
         | "prompt_injection"
@@ -138,8 +144,17 @@ function isCapabilitiesQuestion(text: string): boolean {
 
 function isServiceInfo(text: string): boolean {
   return (
-    hasAny(text, ["что такое городской радар", "что за сервис", "что это за сервис", "для чего сервис", "что такое радар"]) ||
-    (hasAny(text, ["городской радар", "сервис"]) && hasAny(text, ["что", "зачем", "для чего"]))
+    hasAny(text, [
+      "что такое городской радар",
+      "что за сервис",
+      "что это за сервис",
+      "для чего сервис",
+      "что такое радар",
+      "о проекте",
+      "что за проект",
+    ]) ||
+    (hasAny(text, ["городской радар", "сервис"]) && hasAny(text, ["что", "зачем", "для чего"])) ||
+    (hasAny(text, ["проект", "городской радар"]) && hasAny(text, ["что", "о проекте"]))
   );
 }
 
@@ -204,6 +219,18 @@ function isBookAppointment(text: string): boolean {
   ]);
 }
 
+function isLifeSituations(text: string): boolean {
+  return hasAny(text, ["жизненные ситуации", "жизненная ситуация"]);
+}
+
+function isManagementCompany(text: string): boolean {
+  return hasAny(text, ["связь с ук", "управляющ", "ук"]);
+}
+
+function isForbiddenSigns(text: string): boolean {
+  return hasAny(text, ["запрещенные надписи", "запрещённые надписи", "надписи", "граффити"]);
+}
+
 function formatUnknownReply(): string {
   return `Я отвечаю только по сценариям Городского радара. Сейчас могу помочь с такими темами:\n- ${PUBLIC_INFO_OPTIONS.join("\n- ")}`;
 }
@@ -214,6 +241,47 @@ export function sanitizePublicOutbound(text: string): string {
     return "Я могу отвечать только по безопасным пользовательским сценариям Городского радара.";
   }
   return text.trim();
+}
+
+export const PUBLIC_MAIN_MENU_TEXT =
+  "Городской Радар — ИИ-отдел Администрации Йошкар-Олы.\n\n" +
+  "Принимаем сигналы о городских проблемах, консультируем по вопросам благоустройства, связываем с управляющими компаниями.\n\n" +
+  "Напишите сообщение или выберите пункт меню";
+
+export function buildPublicMainMenuAttachments(imageToken?: string | null): unknown[] {
+  const buttons = [
+    [{ type: "callback", text: "🚨 Сообщить о проблеме", payload: "Сообщить о проблеме" }],
+    [{ type: "callback", text: "📨 Мои обращения", payload: "Мои обращения" }],
+    [{ type: "callback", text: "🏢 Связь с УК", payload: "Связь с УК" }],
+    [{ type: "callback", text: "🧭 Жизненные ситуации", payload: "Жизненные ситуации" }],
+    [{ type: "callback", text: "🗓️ Запись на прием в мэрию", payload: "Запись на прием в мэрию" }],
+    [{ type: "callback", text: "🚫 Запрещенные надписи", payload: "Запрещенные надписи" }],
+    [{ type: "callback", text: "👩‍💼 Оператор", payload: "Оператор" }],
+    [
+      { type: "callback", text: "ℹ️ О проекте", payload: "О проекте" },
+      { type: "callback", text: "❓ Помощь", payload: "Помощь" },
+    ],
+  ];
+
+  const attachments: unknown[] = [
+    {
+      type: "inline_keyboard",
+      payload: {
+        buttons,
+      },
+    },
+  ];
+
+  if (imageToken) {
+    attachments.unshift({
+      type: "image",
+      payload: {
+        token: imageToken,
+      },
+    });
+  }
+
+  return attachments;
 }
 
 export function evaluatePublicSafety(text: string): PublicSafetyDecision {
@@ -233,11 +301,11 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
 
   if (isGreeting(normalized)) {
     return {
-      kind: "reply",
+      kind: "menu",
       intent: "greeting",
       eventType: "public_safe_reply",
       reasonCode: "greeting",
-      reply: "Здравствуйте. Я чат-бот Городской радар. Помогу по сервису, карте и городским данным.",
+      reply: PUBLIC_MAIN_MENU_TEXT,
     };
   }
 
@@ -253,12 +321,11 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
 
   if (isCapabilitiesQuestion(normalized)) {
     return {
-      kind: "reply",
+      kind: "menu",
       intent: "capabilities",
       eventType: "public_safe_reply",
       reasonCode: "capabilities",
-      reply:
-        "Сейчас я могу:\n- подсказать, что это за сервис и как им пользоваться\n- объяснить, как искать адреса, объекты и слои на карте\n- подсказать, как сообщить об ошибке или связаться с оператором",
+      reply: PUBLIC_MAIN_MENU_TEXT,
     };
   }
 
@@ -325,6 +392,39 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
       reasonCode: "book_appointment_pending",
       reply:
         "Запись на приём ещё не подключена. Когда этот сценарий будет готов, я буду работать только через безопасную форму с проверкой данных.",
+    };
+  }
+
+  if (isLifeSituations(normalized)) {
+    return {
+      kind: "reply",
+      intent: "life_situations",
+      eventType: "public_feature_pending",
+      reasonCode: "life_situations_pending",
+      reply:
+        "Раздел «Жизненные ситуации» ещё подключается. Скоро здесь будут готовые сценарии и подсказки по типовым городским вопросам.",
+    };
+  }
+
+  if (isManagementCompany(normalized)) {
+    return {
+      kind: "reply",
+      intent: "management_company",
+      eventType: "public_feature_pending",
+      reasonCode: "management_company_pending",
+      reply:
+        "Связь с управляющими компаниями ещё подключается. Когда сценарий будет готов, я смогу направлять обращение по безопасному маршруту.",
+    };
+  }
+
+  if (isForbiddenSigns(normalized)) {
+    return {
+      kind: "reply",
+      intent: "forbidden_signs",
+      eventType: "public_feature_pending",
+      reasonCode: "forbidden_signs_pending",
+      reply:
+        "Сценарий по запрещённым надписям ещё подключается. Когда он будет готов, здесь можно будет передать адрес и описание проблемы.",
     };
   }
 

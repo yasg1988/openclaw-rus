@@ -1,3 +1,6 @@
+import { basename } from "node:path";
+import { readFile } from "node:fs/promises";
+
 export interface MaxBotInfo {
   user_id: number;
   first_name?: string;
@@ -57,6 +60,11 @@ export interface MaxSendResult {
     sender?: MaxUser;
     timestamp?: number;
   };
+}
+
+interface MaxUploadUrlResponse {
+  url: string;
+  token?: string;
 }
 
 export class MaxBotApi {
@@ -234,5 +242,37 @@ export class MaxBotApi {
 
   async sendAction(chatId: number, action = "typing_on"): Promise<unknown> {
     return this.post(`/chats/${chatId}/actions`, {}, { action });
+  }
+
+  async createUpload(type: "image" | "video" | "audio" | "file"): Promise<MaxUploadUrlResponse> {
+    return this.post<MaxUploadUrlResponse>("/uploads", { type }, {});
+  }
+
+  async uploadImageFromFile(filePath: string): Promise<Record<string, unknown>> {
+    const upload = await this.createUpload("image");
+    if (!upload?.url) {
+      throw new Error("MAX upload URL for image was not returned");
+    }
+
+    const bytes = await readFile(filePath);
+    const form = new FormData();
+    form.append("data", new Blob([bytes]), basename(filePath));
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const res = await fetch(upload.url, {
+        method: "POST",
+        headers: this.headers(),
+        body: form,
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`MAX upload image failed: ${res.status} ${res.statusText}`);
+      }
+      return (await res.json()) as Record<string, unknown>;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

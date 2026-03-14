@@ -15,12 +15,18 @@ import {
   upsertMaxUser,
 } from "./logging.js";
 import { resolveMaxAccount } from "./channel.js";
-import { evaluatePublicSafety, sanitizePublicOutbound } from "./public-safety.js";
+import {
+  buildPublicMainMenuAttachments,
+  evaluatePublicSafety,
+  sanitizePublicOutbound,
+} from "./public-safety.js";
 import { getMaxRuntime } from "./runtime.js";
 import { resolveTranscriptionConfig, transcribeMaxAudioAttachment } from "./transcription.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const REPLY_DIRECTIVE_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:\s*[^\]\n]+)\s*\]\]/gi;
+const RADAR_MENU_LOGO_PATH = process.env.MAX_RADAR_MENU_LOGO_PATH || "/root/.openclaw/workspace/agents/gor_radar/logo.png";
+const publicMenuImageByPath = new Map<string, Promise<string | null>>();
 
 type AdminIntent =
   | { action: "list" }
@@ -301,6 +307,7 @@ async function sendStaticReply(params: {
   chatName?: string | null;
   isAdminChat?: boolean | null;
   rawPayload: Record<string, unknown>;
+  attachments?: unknown[];
 }) {
   const replyText = sanitizeOutboundText(params.text);
   if (!replyText.trim()) {
@@ -310,6 +317,7 @@ async function sendStaticReply(params: {
   const result = await params.api.sendMessage({
     chatId: Number(params.chatId),
     text: replyText,
+    attachments: params.attachments,
     format: "markdown",
   });
 
@@ -335,6 +343,25 @@ async function sendStaticReply(params: {
   } catch (error) {
     console.error("[max] outbound log error:", error);
   }
+}
+
+async function getRadarMenuImageToken(api: MaxBotApi): Promise<string | null> {
+  const cacheKey = RADAR_MENU_LOGO_PATH;
+  let promise = publicMenuImageByPath.get(cacheKey);
+  if (!promise) {
+    promise = api
+      .uploadImageFromFile(cacheKey)
+      .then((payload) => {
+        const token = typeof payload?.token === "string" ? payload.token.trim() : "";
+        return token || null;
+      })
+      .catch((error) => {
+        console.error("[max] radar menu image upload error:", error);
+        return null;
+      });
+    publicMenuImageByPath.set(cacheKey, promise);
+  }
+  return promise;
 }
 
 async function handleUpdate(
@@ -651,6 +678,10 @@ async function dispatchToOpenClaw(params: {
     const publicDecision = evaluatePublicSafety(text);
     const safeReply = sanitizePublicOutbound(publicDecision.reply);
     const sessionId = `public:${chatScopeKey}`;
+    const attachments =
+      publicDecision.kind === "menu"
+        ? buildPublicMainMenuAttachments(await getRadarMenuImageToken(api))
+        : undefined;
 
     const userRecord = buildUserRecord({
       user: senderUser,
@@ -696,6 +727,7 @@ async function dispatchToOpenClaw(params: {
       logger,
       chatId,
       text: safeReply,
+      attachments,
       eventType: publicDecision.eventType,
       accountId: opts.accountId,
       agentId: "public_guard",
