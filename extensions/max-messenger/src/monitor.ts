@@ -697,10 +697,9 @@ async function dispatchToOpenClaw(params: {
     const safeReply = sanitizePublicOutbound(publicDecision.reply);
     const sessionId = `public:${chatScopeKey}`;
     const attachments =
-      publicDecision.attachments ??
-      (publicDecision.kind === "menu"
+      publicDecision.kind === "menu"
         ? buildPublicMainMenuAttachments(await getRadarMenuImageToken(api))
-        : undefined);
+        : undefined;
 
     const userRecord = buildUserRecord({
       user: senderUser,
