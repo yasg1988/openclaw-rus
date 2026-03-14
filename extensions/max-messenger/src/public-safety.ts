@@ -40,14 +40,22 @@ export type PublicSafetyDecision =
         | "chat_operator"
         | "my_requests_pending"
         | "book_appointment_pending"
-        | "life_situations_pending"
+        | "life_situations"
         | "management_company_pending"
         | "forbidden_signs_pending"
         | "help"
         | "unknown_request"
         | "prompt_injection"
         | "internal_access_attempt";
+      attachments?: unknown[];
     };
+
+type PublicMenuNode = {
+  id: string;
+  label: string;
+  reply?: string;
+  children?: PublicMenuNode[];
+};
 
 const UNSAFE_RULES: Array<{
   reasonCode: "prompt_injection" | "internal_access_attempt";
@@ -292,8 +300,325 @@ export function buildPublicMainMenuAttachments(imageToken?: string | null): unkn
   return attachments;
 }
 
+const LIFE_SITUATIONS_TREE: PublicMenuNode = {
+  id: "ls:root",
+  label: "Жизненные ситуации",
+  children: [
+    {
+      id: "ls:home",
+      label: "🏘️ Дом, двор и участок",
+      children: [
+        {
+          id: "ls:home-yard",
+          label: "Придомовая территория МКД",
+          children: [
+            { id: "ls:home-yard-care", label: "Содержание территории" },
+            { id: "ls:home-yard-fence", label: "Ограждения и шлагбаумы" },
+            { id: "ls:home-yard-playgrounds", label: "Детские и спортивные площадки" },
+            { id: "ls:home-yard-access", label: "Доступная среда у дома" },
+            { id: "ls:home-yard-owner", label: "Кто отвечает" },
+          ],
+        },
+        {
+          id: "ls:home-plot",
+          label: "Частный дом и участок",
+          children: [
+            { id: "ls:home-plot-care", label: "Содержание участка" },
+            { id: "ls:home-plot-fence", label: "Ограждения участка" },
+            { id: "ls:home-plot-green", label: "Зеленые насаждения на участке" },
+            { id: "ls:home-plot-ban", label: "Что запрещено" },
+          ],
+        },
+        {
+          id: "ls:home-building",
+          label: "Здания и фасады",
+          children: [
+            { id: "ls:home-building-facade", label: "Фасад и входная группа" },
+            { id: "ls:home-building-light", label: "Освещение и внешний вид" },
+            { id: "ls:home-building-signs", label: "Вывески на доме" },
+          ],
+        },
+        {
+          id: "ls:home-construction",
+          label: "Строительная площадка",
+          children: [
+            { id: "ls:home-construction-safety", label: "Ограждение и безопасность" },
+            { id: "ls:home-construction-clean", label: "Чистота и вывоз мусора" },
+            { id: "ls:home-construction-restore", label: "Восстановление после работ" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "ls:roads",
+      label: "🚗 Улицы, дороги и парковки",
+      children: [
+        {
+          id: "ls:roads-cleaning",
+          label: "Уборка улиц и тротуаров",
+          children: [
+            { id: "ls:roads-cleaning-summer", label: "Летняя уборка" },
+            { id: "ls:roads-cleaning-winter", label: "Зимняя уборка" },
+            { id: "ls:roads-cleaning-ice", label: "Наледь и снег" },
+          ],
+        },
+        {
+          id: "ls:roads-surface",
+          label: "Дороги и покрытия",
+          children: [
+            { id: "ls:roads-surface-pits", label: "Ямы и разрушение покрытия" },
+            { id: "ls:roads-surface-yards", label: "Внутриквартальные проезды" },
+            { id: "ls:roads-surface-bridges", label: "Искусственные сооружения" },
+          ],
+        },
+        {
+          id: "ls:roads-water",
+          label: "Ливневая канализация",
+          children: [
+            { id: "ls:roads-water-clog", label: "Засор ливневки" },
+            { id: "ls:roads-water-flood", label: "Подтопление" },
+            { id: "ls:roads-water-owner", label: "Кто обслуживает" },
+          ],
+        },
+        {
+          id: "ls:roads-parking",
+          label: "Стоянки и парковки",
+          children: [
+            { id: "ls:roads-parking-care", label: "Содержание стоянки" },
+            { id: "ls:roads-parking-snow", label: "Снег и мусор" },
+            { id: "ls:roads-parking-owner", label: "Кто отвечает" },
+          ],
+        },
+        {
+          id: "ls:roads-earthworks",
+          label: "Земляные работы",
+          children: [
+            { id: "ls:roads-earthworks-permit", label: "Нужно ли разрешение" },
+            { id: "ls:roads-earthworks-fence", label: "Ограждение раскопок" },
+            { id: "ls:roads-earthworks-restore", label: "Восстановление благоустройства" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "ls:comfort",
+      label: "🌳 Озеленение и отдых",
+      children: [
+        {
+          id: "ls:comfort-green",
+          label: "Зеленые насаждения",
+          children: [
+            { id: "ls:comfort-green-care", label: "Уход и содержание" },
+            { id: "ls:comfort-green-cut", label: "Обрезка и снос" },
+            { id: "ls:comfort-green-damage", label: "Повреждение деревьев и газонов" },
+          ],
+        },
+        {
+          id: "ls:comfort-parks",
+          label: "Парки, скверы и зоны отдыха",
+          children: [
+            { id: "ls:comfort-parks-care", label: "Содержание территории" },
+            { id: "ls:comfort-parks-water", label: "Пляжи, вода и фонтаны" },
+            { id: "ls:comfort-parks-objects", label: "Что должно быть на территории" },
+          ],
+        },
+        {
+          id: "ls:comfort-maf",
+          label: "Малые архитектурные формы",
+          children: [
+            { id: "ls:comfort-maf-benches", label: "Скамейки, урны, навесы" },
+            { id: "ls:comfort-maf-repair", label: "Состояние и ремонт" },
+          ],
+        },
+        { id: "ls:comfort-toilets", label: "Общественные туалеты" },
+        { id: "ls:comfort-holidays", label: "Праздничное оформление города" },
+      ],
+    },
+    {
+      id: "ls:visual",
+      label: "🧹 Мусор и визуальная среда",
+      children: [
+        {
+          id: "ls:visual-clean",
+          label: "Чистота и санитарное состояние",
+          children: [
+            { id: "ls:visual-clean-general", label: "Общие требования к чистоте" },
+            { id: "ls:visual-clean-snow", label: "Снег, лед и наледь" },
+            { id: "ls:visual-clean-containers", label: "Контейнеры и площадки" },
+          ],
+        },
+        {
+          id: "ls:visual-waste",
+          label: "Отходы и раздельный сбор",
+          children: [
+            { id: "ls:visual-waste-remove", label: "Сбор и вывоз отходов" },
+            { id: "ls:visual-waste-oversized", label: "Крупногабаритный мусор" },
+            { id: "ls:visual-waste-ban", label: "Что нельзя складировать" },
+          ],
+        },
+        { id: "ls:visual-signposts", label: "Информационные указатели" },
+        {
+          id: "ls:visual-signs",
+          label: "Вывески и реклама",
+          children: [
+            { id: "ls:visual-signs-place", label: "Где можно размещать" },
+            { id: "ls:visual-signs-rules", label: "Требования к виду" },
+            { id: "ls:visual-signs-heritage", label: "На объектах культурного наследия" },
+          ],
+        },
+        { id: "ls:visual-graffiti", label: "Запрещенные надписи и граффити" },
+        {
+          id: "ls:visual-stalls",
+          label: "Нестационарные объекты",
+          children: [
+            { id: "ls:visual-stalls-place", label: "Размещение объекта" },
+            { id: "ls:visual-stalls-ban", label: "Что запрещено рядом" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "ls:civic",
+      label: "🤝 Участие, контроль и ответственность",
+      children: [
+        {
+          id: "ls:civic-participation",
+          label: "Участие жителей",
+          children: [
+            { id: "ls:civic-participation-volunteer", label: "Добровольные работы" },
+            { id: "ls:civic-participation-forms", label: "Формы участия" },
+            { id: "ls:civic-participation-control", label: "Общественный контроль" },
+          ],
+        },
+        {
+          id: "ls:civic-owner",
+          label: "Кто отвечает за территорию",
+          children: [
+            { id: "ls:civic-owner-roads", label: "Дороги и тротуары" },
+            { id: "ls:civic-owner-houses", label: "Дворы и дома" },
+            { id: "ls:civic-owner-utilities", label: "Инженерные объекты" },
+          ],
+        },
+        {
+          id: "ls:civic-control",
+          label: "Контроль и ответственность",
+          children: [
+            { id: "ls:civic-control-who", label: "Кто контролирует" },
+            { id: "ls:civic-control-what", label: "Что делать при нарушении" },
+          ],
+        },
+        {
+          id: "ls:civic-special",
+          label: "Особые территории",
+          children: [
+            { id: "ls:civic-special-cemetery", label: "Места погребения" },
+            { id: "ls:civic-special-other", label: "Другие специальные объекты" },
+          ],
+        },
+        {
+          id: "ls:civic-reference",
+          label: "Справочник по нормам",
+          children: [
+            { id: "ls:civic-reference-terms", label: "Основные понятия" },
+            { id: "ls:civic-reference-apps", label: "Приложения к правилам" },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+function makeMenuButton(text: string, payload: string) {
+  return [{ type: "callback", text, payload }];
+}
+
+function findMenuNode(id: string, node: PublicMenuNode = LIFE_SITUATIONS_TREE, parent?: PublicMenuNode): { node: PublicMenuNode; parent?: PublicMenuNode } | null {
+  if (node.id === id) {
+    return { node, parent };
+  }
+  for (const child of node.children ?? []) {
+    const found = findMenuNode(id, child, node);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function buildMenuAttachments(node: PublicMenuNode, parent?: PublicMenuNode): unknown[] {
+  const buttons = (node.children ?? []).map((child) => makeMenuButton(child.label, child.id));
+  if (parent) {
+    buttons.push(makeMenuButton("◀️ Назад", parent.id));
+  }
+  buttons.push(makeMenuButton("🏠 Главное меню", "Главное меню"));
+
+  return [
+    {
+      type: "inline_keyboard",
+      payload: {
+        buttons,
+      },
+    },
+  ];
+}
+
+function buildLeafReply(node: PublicMenuNode, parent?: PublicMenuNode): string {
+  const topic = parent ? `Раздел «${parent.label} → ${node.label}».` : `Раздел «${node.label}».`;
+  return (
+    `${topic}\n\n` +
+    "Здесь я буду показывать жителю короткое объяснение по правилам благоустройства, кто отвечает за эту тему, что считается нарушением и куда обращаться."
+  );
+}
+
+function evaluateLifeSituationsMenu(text: string): PublicSafetyDecision | null {
+  if (text === "жизненные ситуации") {
+    return {
+      kind: "menu",
+      intent: "life_situations",
+      eventType: "public_safe_reply",
+      reasonCode: "life_situations",
+      reply: "Выберите тему по благоустройству города.",
+      attachments: buildMenuAttachments(LIFE_SITUATIONS_TREE),
+    };
+  }
+
+  if (!text.startsWith("ls:")) {
+    return null;
+  }
+
+  const found = findMenuNode(text);
+  if (!found) {
+    return null;
+  }
+
+  if (found.node.children?.length) {
+    return {
+      kind: "menu",
+      intent: "life_situations",
+      eventType: "public_safe_reply",
+      reasonCode: "life_situations",
+      reply: `Выберите раздел «${found.node.label}».`,
+      attachments: buildMenuAttachments(found.node, found.parent),
+    };
+  }
+
+  return {
+    kind: "reply",
+    intent: "life_situations",
+    eventType: "public_safe_reply",
+    reasonCode: "life_situations",
+    reply: buildLeafReply(found.node, found.parent),
+    attachments: buildMenuAttachments(found.node, found.parent),
+  };
+}
+
 export function evaluatePublicSafety(text: string): PublicSafetyDecision {
   const normalized = normalize(text);
+
+  const lifeSituationsDecision = evaluateLifeSituationsMenu(normalized);
+  if (lifeSituationsDecision) {
+    return lifeSituationsDecision;
+  }
 
   for (const rule of UNSAFE_RULES) {
     if (rule.matches(normalized)) {
@@ -405,12 +730,12 @@ export function evaluatePublicSafety(text: string): PublicSafetyDecision {
 
   if (isLifeSituations(normalized)) {
     return {
-      kind: "reply",
+      kind: "menu",
       intent: "life_situations",
-      eventType: "public_feature_pending",
-      reasonCode: "life_situations_pending",
-      reply:
-        "Раздел «Жизненные ситуации» ещё подключается. Скоро здесь будут готовые сценарии и подсказки по типовым городским вопросам.",
+      eventType: "public_safe_reply",
+      reasonCode: "life_situations",
+      reply: "Выберите тему по благоустройству города.",
+      attachments: buildMenuAttachments(LIFE_SITUATIONS_TREE),
     };
   }
 
