@@ -15,6 +15,7 @@ import {
   upsertMaxUser,
 } from "./logging.js";
 import { resolveMaxAccount } from "./channel.js";
+import { evaluatePublicSafety, sanitizePublicOutbound } from "./public-safety.js";
 import { getMaxRuntime } from "./runtime.js";
 import { resolveTranscriptionConfig, transcribeMaxAudioAttachment } from "./transcription.js";
 
@@ -284,6 +285,58 @@ async function logMaxOutbound(
   );
 }
 
+async function sendStaticReply(params: {
+  api: MaxBotApi;
+  logger: ReturnType<typeof resolveLoggerConfig>;
+  chatId: string;
+  text: string;
+  eventType: string;
+  accountId: string;
+  agentId: string;
+  chatType: "direct" | "group";
+  chatScopeKey: string;
+  senderUser?: MaxUpdate["user"];
+  sessionId?: string;
+  chatTag?: string | null;
+  chatName?: string | null;
+  isAdminChat?: boolean | null;
+  rawPayload: Record<string, unknown>;
+}) {
+  const replyText = sanitizeOutboundText(params.text);
+  if (!replyText.trim()) {
+    return;
+  }
+
+  const result = await params.api.sendMessage({
+    chatId: Number(params.chatId),
+    text: replyText,
+    format: "markdown",
+  });
+
+  try {
+    await logMaxOutbound(params.logger, {
+      user: params.senderUser,
+      chatId: params.chatId,
+      text: replyText,
+      eventType: params.eventType,
+      sessionId: params.sessionId,
+      accountId: params.accountId,
+      agentId: params.agentId,
+      chatType: params.chatType,
+      chatScopeKey: params.chatScopeKey,
+      chatTag: params.chatTag,
+      chatName: params.chatName,
+      isAdminChat: params.isAdminChat,
+      rawPayload: {
+        ...params.rawPayload,
+        messageId: result?.message?.body?.mid || null,
+      },
+    });
+  } catch (error) {
+    console.error("[max] outbound log error:", error);
+  }
+}
+
 async function handleUpdate(
   update: MaxUpdate,
   ctx: {
@@ -424,6 +477,7 @@ async function dispatchToOpenClaw(params: {
   const dmPolicy = String(account.config.dmPolicy || "pairing");
   const directUserAllowlistTable = String(account.config.directUserAllowlistTable || "").trim();
   const adminChatTable = String(account.config.adminChatTable || "").trim();
+  const isPublicResidentBot = opts.accountId === "radar";
 
   if (chatType === "direct" && directUserAllowlistTable) {
     try {
@@ -591,6 +645,81 @@ async function dispatchToOpenClaw(params: {
       });
       return;
     }
+  }
+
+  if (isPublicResidentBot) {
+    const publicDecision = evaluatePublicSafety(text);
+    const safeReply = sanitizePublicOutbound(publicDecision.reply);
+    const sessionId = `public:${chatScopeKey}`;
+
+    const userRecord = buildUserRecord({
+      user: senderUser,
+      chatId,
+    });
+    if (userRecord) {
+      try {
+        await upsertMaxUser(logger, userRecord);
+      } catch (error) {
+        console.error("[max] user upsert error:", error);
+      }
+    }
+
+    try {
+      await logMaxInbound(logger, {
+        user: senderUser,
+        chatId,
+        text,
+        eventType: `${deriveInboundEventType(rawUpdate?.update_type, hasVoiceAttachment)}:${publicDecision.intent}`,
+        sessionId,
+        accountId: opts.accountId,
+        agentId: "public_guard",
+        chatType,
+        chatScopeKey,
+        chatTag: registeredChat?.chat_tag || null,
+        chatName: registeredChat?.chat_name || null,
+        isAdminChat: registeredChat?.is_admin ?? null,
+        rawPayload: {
+          ...(rawUpdate || { text, senderId, chatId, chatType }),
+          publicPolicy: {
+            intent: publicDecision.intent,
+            eventType: publicDecision.eventType,
+            reasonCode: publicDecision.reasonCode,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("[max] inbound log error:", error);
+    }
+
+    await sendStaticReply({
+      api,
+      logger,
+      chatId,
+      text: safeReply,
+      eventType: publicDecision.eventType,
+      accountId: opts.accountId,
+      agentId: "public_guard",
+      chatType,
+      chatScopeKey,
+      senderUser,
+      sessionId,
+      chatTag: registeredChat?.chat_tag || null,
+      chatName: registeredChat?.chat_name || null,
+      isAdminChat: registeredChat?.is_admin ?? null,
+      rawPayload: {
+        policy: {
+          intent: publicDecision.intent,
+          reasonCode: publicDecision.reasonCode,
+        },
+      },
+    });
+
+    opts.setStatus({
+      ...opts.getStatus(),
+      lastInboundAt: Date.now(),
+      lastOutboundAt: Date.now(),
+    });
+    return;
   }
 
   const route = core.channel.routing.resolveAgentRoute({
